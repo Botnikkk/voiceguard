@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../dashboard/screens/dashboard_screen.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -26,7 +27,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _handleAuthState(AuthState? prev, AuthState next) {
     if (next.status == AuthStatus.authenticated) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const Placeholder()),
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
     } else if (next.status == AuthStatus.error && next.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authProvider, _handleAuthState);
@@ -79,7 +80,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AppColors.bgSurface,
-            border: Border.all(color: AppColors.accentCyan.withValues(alpha: 0.5)),
+            border:
+                Border.all(color: AppColors.accentCyan.withValues(alpha: 0.5)),
             boxShadow: [
               BoxShadow(
                 color: AppColors.accentCyan.withValues(alpha: 0.25),
@@ -88,10 +90,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ],
           ),
-          child: const Icon(Icons.shield_moon_rounded, color: AppColors.accentCyan, size: 40),
+          child: const Icon(Icons.shield_moon_rounded,
+              color: AppColors.accentCyan, size: 40),
         ),
         const SizedBox(height: 20),
-        Text('VOICEGUARD AI', style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 26)),
+        Text('VOICEGUARD AI',
+            style: Theme.of(context)
+                .textTheme
+                .displayLarge
+                ?.copyWith(fontSize: 26)),
         const SizedBox(height: 6),
         const Text(
           'Real-Time Voice Clone Defense System',
@@ -112,19 +119,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('SECURE LOGIN', style: TextStyle(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-            letterSpacing: 1.2,
-          )),
+          const Text('SECURE LOGIN',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                letterSpacing: 1.2,
+              )),
           const SizedBox(height: 20),
           TextField(
             controller: _userIdController,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: const InputDecoration(
               labelText: 'User ID',
-              prefixIcon: Icon(Icons.badge_outlined, color: AppColors.textSecondary),
+              prefixIcon:
+                  Icon(Icons.badge_outlined, color: AppColors.textSecondary),
             ),
           ),
           const SizedBox(height: 16),
@@ -134,13 +143,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
               labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textSecondary),
+              prefixIcon: const Icon(Icons.lock_outline,
+                  color: AppColors.textSecondary),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
                   color: AppColors.textSecondary,
                 ),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
           ),
@@ -167,7 +180,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Expanded(child: Divider()),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('OR', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                child: Text('OR',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
               ),
               Expanded(child: Divider()),
             ],
@@ -177,7 +191,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onPressed: isLoading
                 ? null
                 : () => ref.read(authProvider.notifier).loginWithBiometrics(),
-            icon: const Icon(Icons.fingerprint, color: AppColors.accentCyan, size: 22),
+            icon: const Icon(Icons.fingerprint,
+                color: AppColors.accentCyan, size: 22),
             label: const Text('Login with Biometrics / Face ID'),
           ),
         ],
