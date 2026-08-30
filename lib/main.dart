@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const VoiceGaurdApp());
+  runApp(const VoiceGuardApp());
 }
 
-class VoiceGaurdApp extends StatelessWidget {
-  const VoiceGaurdApp({super.key});
+class VoiceGuardApp extends StatelessWidget {
+  const VoiceGuardApp({super.key});
 
   @override
   Widget build(BuildContext context) {
