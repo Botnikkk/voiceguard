@@ -1,5 +1,5 @@
-package com.example.voicegaurd
+package com.example.voiceguard
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity: FlutterFragmentActivity()

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/services/call_detection_service.dart';
+import 'core/theme/app_theme.dart';
+import 'features/auth/screens/login_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: VoiceGuardApp()));
@@ -13,15 +16,23 @@ class VoiceGuardApp extends StatefulWidget {
 }
 
 class _VoiceGuardAppState extends State<VoiceGuardApp> {
+  @override
+  void initState() {
+    super.initState();
+
+    CallDetectionService.instance.start();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      navigatorKey: CallDetectionService.instance.navigatorKey,
       title: 'VoiceGuard AI',
       debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkTheme,
+      darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
-      home: Placeholder(),
+      home: const LoginScreen(),
     );
   }
 }
-
