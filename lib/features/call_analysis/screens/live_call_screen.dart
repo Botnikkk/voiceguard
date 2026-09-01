@@ -1,23 +1,77 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/risk_gauge.dart';
 import '../providers/risk_score_provider.dart';
 
-class LiveCallScreen extends ConsumerWidget {
-  /// Caller's display name. Real telecom calls rarely expose a name (only
-  /// a number) unless it matches a local contact — resolve that lookup
-  /// yourself and pass it in, or fall back to "Unknown Caller".
+class LiveCallScreen extends ConsumerStatefulWidget {
+  const LiveCallScreen({super.key});
 
-  /// Real caller number when launched from an actual incoming call via
-  /// [CallDetectionService]; a dummy number for the "Simulate" demo path.
+  @override
+  ConsumerState<LiveCallScreen> createState() => _LiveCallScreenState();
+}
 
-  const LiveCallScreen({
-    super.key,
-  });
+class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
+  int _seconds = 0;
+  Timer? _timer;
 
-  void _showEscalationSheet(BuildContext context) {
+  @override
+  void initState() {
+    super.initState();
+    // Start the timer when the screen opens
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _seconds++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel(); // Prevent memory leaks
+    super.dispose();
+  }
+
+  String get _formattedTime {
+    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  // Handle saving the log to the Hive Database
+  void _endCall(double finalRiskScore, {bool escalate = false}) {
+    RecordingVerdict verdict;
+    if (escalate) {
+      verdict = RecordingVerdict.escalated;
+    } else if (finalRiskScore >= 0.7) {
+      verdict = RecordingVerdict.flagged;
+    } else {
+      verdict = RecordingVerdict.safe;
+    }
+
+    final now = DateTime.now();
+    final timeString = DateFormat('MMM d, h:mm a').format(now);
+
+    final newLog = RecordingLog(
+      id: 'c-${now.millisecondsSinceEpoch}',
+      recordingName: 'Call - $timeString',
+      timestamp: now,
+      riskScore: finalRiskScore,
+      verdict: verdict,
+      durationInSeconds: _seconds,
+    );
+
+    // Add directly to the Hive Box! No clearing required.
+    Hive.box<RecordingLog>("RecordingBox").add(newLog);
+
+    Navigator.of(context).pop();
+  }
+
+  void _showEscalationSheet(BuildContext context, double currentRiskScore) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.bgSurfaceElevated,
@@ -53,8 +107,9 @@ class LiveCallScreen extends ConsumerWidget {
               icon: Icons.send_rounded,
               variant: ButtonVariant.danger,
               onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Close bottom sheet
+                _endCall(currentRiskScore,
+                    escalate: true); // Save & close screen
               },
             ),
             const SizedBox(height: 10),
@@ -70,13 +125,13 @@ class LiveCallScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final riskScore = ref.watch(riskScoreProvider);
     final riskColor = AppColors.riskColor(riskScore);
     final isDanger = riskScore >= 0.7;
 
     return PopScope(
-      canPop: true,
+      canPop: false, // Prevent accidental back button presses during a "call"
       child: Scaffold(
         backgroundColor: AppColors.bgDeepest,
         body: SafeArea(
@@ -127,7 +182,7 @@ class LiveCallScreen extends ConsumerWidget {
                 ),
                 _buildDetectionSignals(riskScore),
                 const SizedBox(height: 20),
-                _buildActionButtons(context, riskColor),
+                _buildActionButtons(context, riskColor, riskScore),
                 const SizedBox(height: 24),
               ],
             ),
@@ -159,9 +214,14 @@ class LiveCallScreen extends ConsumerWidget {
               fontSize: 20,
               fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 2),
-        const SizedBox(height: 6),
-        const _CallTimer(),
+        const SizedBox(height: 8),
+        Text(
+          _formattedTime,
+          style: const TextStyle(
+              color: AppColors.accentCyan,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }
@@ -234,7 +294,8 @@ class LiveCallScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, Color riskColor) {
+  Widget _buildActionButtons(
+      BuildContext context, Color riskColor, double riskScore) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -244,55 +305,18 @@ class LiveCallScreen extends ConsumerWidget {
             label: 'Stop listening',
             icon: Icons.stop_circle_outlined,
             variant: ButtonVariant.danger,
-            onPressed: () => Navigator.of(context).pop(),
+            // Trigger save function natively
+            onPressed: () => _endCall(riskScore),
           ),
           const SizedBox(height: 12),
           CustomButton(
             label: 'Escalate to Fraud Team',
             icon: Icons.local_police_outlined,
             variant: ButtonVariant.primary,
-            onPressed: () => _showEscalationSheet(context),
+            onPressed: () => _showEscalationSheet(context, riskScore),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _CallTimer extends StatefulWidget {
-  const _CallTimer();
-
-  @override
-  State<_CallTimer> createState() => _CallTimerState();
-}
-
-class _CallTimerState extends State<_CallTimer> {
-  int _seconds = 0;
-  late final Stream<int> _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = Stream.periodic(const Duration(seconds: 1), (i) => i + 1);
-    _ticker.listen((s) {
-      if (mounted) setState(() => _seconds = s);
-    });
-  }
-
-  String get _formatted {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      _formatted,
-      style: const TextStyle(
-          color: AppColors.accentCyan,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600),
     );
   }
 }
