@@ -14,7 +14,8 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final logs = CallLog.dummyList();
     final safeCount = logs.where((l) => l.verdict == CallVerdict.safe).length;
-    final flaggedCount = logs.where((l) => l.verdict != CallVerdict.safe).length;
+    final flaggedCount =
+        logs.where((l) => l.verdict != CallVerdict.safe).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -67,10 +68,9 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.accentBlue,
-        icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.white),
-        label: const Text('Simulate Incoming Call', style: TextStyle(color: Colors.white)),
+        child: const Icon(Icons.mic, color: Colors.white),
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const LiveCallScreen()),
         ),
@@ -101,7 +101,8 @@ class DashboardScreen extends StatelessWidget {
               color: AppColors.safeGreen.withValues(alpha: 0.12),
               border: Border.all(color: AppColors.safeGreen),
             ),
-            child: const Icon(Icons.shield_rounded, color: AppColors.safeGreen, size: 26),
+            child: const Icon(Icons.shield_rounded,
+                color: AppColors.safeGreen, size: 26),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -133,7 +134,8 @@ class DashboardScreen extends StatelessWidget {
                 const SizedBox(height: 4),
                 const Text(
                   'Real-time voice analysis engine is monitoring calls',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
                 ),
               ],
             ),
@@ -143,7 +145,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, {VoidCallback? onSeeAll}) {
+  Widget _buildSectionHeader(BuildContext context, String title,
+      {VoidCallback? onSeeAll}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -188,9 +191,14 @@ class _CallLogTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(log.callerName,
-                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                    style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
                 const SizedBox(height: 2),
-                Text(log.callerNumber, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                Text(log.callerNumber,
+                    style: const TextStyle(
+                        color: AppColors.textMuted, fontSize: 12)),
               ],
             ),
           ),
@@ -198,10 +206,12 @@ class _CallLogTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text('${(log.riskScore * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.w800, fontSize: 14)),
               const SizedBox(height: 2),
               Text(DateFormat('h:mm a').format(log.timestamp),
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 11)),
             ],
           ),
         ],

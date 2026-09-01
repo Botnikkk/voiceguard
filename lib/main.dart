@@ -8,6 +8,9 @@ void main() {
   runApp(const ProviderScope(child: VoiceGuardApp()));
 }
 
+final GlobalKey<NavigatorState> globalNavigatorKey =
+    GlobalKey<NavigatorState>();
+
 class VoiceGuardApp extends StatefulWidget {
   const VoiceGuardApp({super.key});
 
@@ -26,7 +29,7 @@ class _VoiceGuardAppState extends State<VoiceGuardApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: CallDetectionService.instance.navigatorKey,
+      navigatorKey: globalNavigatorKey,
       title: 'VoiceGuard AI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,

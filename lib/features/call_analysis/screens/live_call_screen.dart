@@ -9,16 +9,12 @@ class LiveCallScreen extends ConsumerWidget {
   /// Caller's display name. Real telecom calls rarely expose a name (only
   /// a number) unless it matches a local contact — resolve that lookup
   /// yourself and pass it in, or fall back to "Unknown Caller".
-  final String callerName;
 
   /// Real caller number when launched from an actual incoming call via
   /// [CallDetectionService]; a dummy number for the "Simulate" demo path.
-  final String callerNumber;
 
   const LiveCallScreen({
     super.key,
-    this.callerName = 'Rajesh Kumar',
-    this.callerNumber = '+91 98XXX 44210',
   });
 
   void _showEscalationSheet(BuildContext context) {
@@ -152,22 +148,18 @@ class LiveCallScreen extends ConsumerWidget {
             color: AppColors.bgSurface,
             border: Border.all(color: AppColors.border, width: 1.5),
           ),
-          child: const Icon(Icons.person_rounded,
-              color: AppColors.textSecondary, size: 44),
+          child:
+              const Icon(Icons.mic, color: AppColors.textSecondary, size: 44),
         ),
         const SizedBox(height: 14),
-        Text(
-          callerName,
-          style: const TextStyle(
+        const Text(
+          "Listening...",
+          style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
-        Text(
-          callerNumber,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
         const SizedBox(height: 6),
         const _CallTimer(),
       ],
@@ -249,8 +241,8 @@ class LiveCallScreen extends ConsumerWidget {
         children: [
           const SizedBox(width: 12),
           CustomButton(
-            label: 'End Call',
-            icon: Icons.call_end_rounded,
+            label: 'Stop listening',
+            icon: Icons.stop_circle_outlined,
             variant: ButtonVariant.danger,
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -296,7 +288,7 @@ class _CallTimerState extends State<_CallTimer> {
   @override
   Widget build(BuildContext context) {
     return Text(
-      'In call · $_formatted',
+      _formatted,
       style: const TextStyle(
           color: AppColors.accentCyan,
           fontSize: 12.5,

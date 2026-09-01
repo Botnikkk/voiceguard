@@ -27,7 +27,8 @@ class CallDetectionService {
   CallDetectionService._();
   static final CallDetectionService instance = CallDetectionService._();
 
-  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  final GlobalKey<NavigatorState> globalNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   bool _isShowingCallScreen = false;
 
@@ -42,7 +43,8 @@ class CallDetectionService {
     ].request();
 
     if (statuses[Permission.phone]?.isGranted != true) {
-      debugPrint('[CallDetectionService] Phone permission denied — cannot detect real calls.');
+      debugPrint(
+          '[CallDetectionService] Phone permission denied — cannot detect real calls.');
       return;
     }
 
@@ -55,7 +57,7 @@ class CallDetectionService {
         _launchLiveCallScreen(event.number);
         break;
       case PhoneStateStatus.CALL_OUTGOING:
-    // Handle outgoing call logic here
+        // Handle outgoing call logic here
         break;
       case PhoneStateStatus.CALL_ENDED:
       case PhoneStateStatus.NOTHING:
@@ -65,22 +67,18 @@ class CallDetectionService {
         // Call was answered — LiveCallScreen is already showing from the
         // CALL_INCOMING event above; nothing further to do here.
         break;
-
     }
   }
 
   void _launchLiveCallScreen(String? number) {
     if (_isShowingCallScreen) return;
-    final navState = navigatorKey.currentState;
+    final navState = globalNavigatorKey.currentState;
     if (navState == null) return;
 
     _isShowingCallScreen = true;
     navState.push(
       MaterialPageRoute(
-        builder: (_) => LiveCallScreen(
-          callerName: 'Unknown Caller', // resolve against local contacts if desired
-          callerNumber: number ?? 'Unknown number',
-        ),
+        builder: (_) => const LiveCallScreen(),
       ),
     );
   }

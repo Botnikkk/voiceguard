@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:voiceguard/features/auth/screens/login_screen.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/custom_button.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +15,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _autoEscalate = false;
   bool _biometricLock = true;
   double _sensitivity = 0.7;
+
+  void _logOut() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,10 +55,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Detection Sensitivity',
-                    style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 const Text('Higher sensitivity flags more calls for review',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12.5)),
                 Slider(
                   value: _sensitivity,
                   activeColor: AppColors.accentCyan,
@@ -70,10 +82,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 20),
           _sectionLabel('ACCOUNT'),
           _navTile(icon: Icons.person_outline, label: 'Analyst Profile'),
-          _navTile(icon: Icons.notifications_outlined, label: 'Notification Preferences'),
+          _navTile(
+              icon: Icons.notifications_outlined,
+              label: 'Notification Preferences'),
           _navTile(icon: Icons.info_outline, label: 'About VoiceGuard AI'),
-          const SizedBox(height: 20),
-          _navTile(icon: Icons.logout_rounded, label: 'Log Out', color: AppColors.dangerRed),
+          CustomButton(
+            label: 'LOG OUT',
+            icon: Icons.logout_rounded,
+            variant: ButtonVariant.danger,
+            onPressed: () => _logOut(),
+          ),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -107,15 +126,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: SwitchListTile(
         contentPadding: EdgeInsets.zero,
         activeTrackColor: AppColors.accentBlue,
-        title: Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-        subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        title: Text(title,
+            style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14.5)),
+        subtitle: Text(subtitle,
+            style:
+                const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
         value: value,
         onChanged: onChanged,
       ),
     );
   }
 
-  Widget _navTile({required IconData icon, required String label, Color? color}) {
+  Widget _navTile(
+      {required IconData icon, required String label, Color? color}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -125,8 +151,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: ListTile(
         leading: Icon(icon, color: color ?? AppColors.textSecondary),
-        title: Text(label, style: TextStyle(color: color ?? AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14.5)),
-        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+        title: Text(label,
+            style: TextStyle(
+                color: color ?? AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 14.5)),
+        trailing:
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
         onTap: () {},
       ),
     );
