@@ -8,7 +8,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vad/vad.dart';
 
-import '../../../core/data/database.dart';
 import '../../../models/recording_log.dart';
 
 import '../../../../core/theme/app_colors.dart';
