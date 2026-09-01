@@ -1,10 +1,16 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:vad/vad.dart';
+
+import '../../../core/data/database.dart';
 import '../../../models/recording_log.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/risk_gauge.dart';
@@ -21,18 +27,118 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
   int _seconds = 0;
   Timer? _timer;
 
+  late final VadHandler _vadHandler;
+  bool _vadStarted = false;
+
+  bool _isSpeaking = false;
+  double _amplitude = 0.0;
+
+  final List<StreamSubscription> _vadSubscriptions = [];
+
   @override
   void initState() {
     super.initState();
-    // Start the timer when the screen opens
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _seconds++);
     });
+    _vadHandler = VadHandler.create(isDebug: false);
+    _setupVadHandler();
+    _startListening();
+  }
+
+  void _setupVadHandler() {
+    // Fires the moment the model thinks speech might have started. Can be
+    // a misfire on very short blips - see onVADMisfire below.
+    _vadSubscriptions.add(_vadHandler.onSpeechStart.listen((_) {
+      if (mounted) setState(() => _isSpeaking = true);
+    }));
+
+    // Fires once enough consecutive frames confirm this is real speech,
+    // not a brief blip. Good hook point if you want a stricter "is
+    // actually talking" signal than onSpeechStart alone.
+    _vadSubscriptions.add(_vadHandler.onRealSpeechStart.listen((_) {
+      // no-op for now - reserved for tightening the UI state later if
+      // onSpeechStart proves too eager in practice.
+    }));
+
+    // Fires when a confirmed speech segment ends, with the full utterance
+    // as PCM float samples. This is the natural point to hand audio off
+    // to your backend AI analysis.
+    _vadSubscriptions
+        .add(_vadHandler.onSpeechEnd.listen((List<double> samples) {
+      if (mounted) setState(() => _isSpeaking = false);
+
+      // [STEP 3 PLUMBING LIVES HERE]
+      // `samples` is the complete speech utterance (16kHz mono, float).
+      // webSocket.add(samples);
+    }));
+
+    // Fires when speech was tentatively detected (onSpeechStart already
+    // fired) but didn't last long enough to count as real speech - the
+    // package's own false-positive filter. Just resets our UI state.
+    _vadSubscriptions.add(_vadHandler.onVADMisfire.listen((_) {
+      if (mounted) setState(() => _isSpeaking = false);
+    }));
+
+    // Fires for every processed audio frame with a speech probability and
+    // the raw frame samples - this is what drives the amplitude
+    // visualizer bars now, instead of a separate getAmplitude() poll.
+    _vadSubscriptions.add(_vadHandler.onFrameProcessed.listen((frameData) {
+      final frame = frameData.frame;
+      if (frame.isEmpty) return;
+
+      double sumSquares = 0.0;
+      for (final sample in frame) {
+        sumSquares += sample * sample;
+      }
+      final double rms = math.sqrt(sumSquares / frame.length);
+
+      // Frame samples are normalized floats in roughly [-1, 1], so RMS is
+      // typically small; scale it up for a visually responsive bar.
+      final double normalized = (rms * 6.0).clamp(0.0, 1.0);
+
+      if (mounted) {
+        setState(() {
+          _amplitude = normalized < 0.05 ? 0.05 : normalized;
+        });
+      }
+    }));
+
+    _vadSubscriptions.add(_vadHandler.onError.listen((String message) {
+      debugPrint('VAD error: $message');
+    }));
+  }
+
+  Future<void> _startListening() async {
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) return;
+
+    await _vadHandler.startListening(
+      model: 'v5',
+      // How confident the model must be to flag a frame as speech.
+      // Raise this (e.g. 0.6-0.7) if you still get false positives in a
+      // very noisy/crowded room; lower it if quiet speakers get missed.
+      positiveSpeechThreshold: 0.5,
+      negativeSpeechThreshold: 0.35,
+      // How many consecutive speech frames are needed before it counts
+      // as "real" speech rather than a misfire. Raise for stricter
+      // filtering of brief noise spikes (coughs, taps, chair scrapes).
+      minSpeechFrames: 3,
+      // How many consecutive non-speech frames to wait before declaring
+      // speech ended - a built-in version of your old hangover timer.
+      redemptionFrames: 8,
+    );
+    if (mounted) setState(() => _vadStarted = true);
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Prevent memory leaks
+    _timer?.cancel();
+    for (final sub in _vadSubscriptions) {
+      sub.cancel();
+    }
+    // dispose() is async, but Widget.dispose() is sync - fire and forget.
+    _vadHandler.dispose();
     super.dispose();
   }
 
@@ -42,16 +148,16 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
     return '$m:$s';
   }
 
-  // Handle saving the log to the Hive Database
-  void _endCall(double finalRiskScore, {bool escalate = false}) {
-    RecordingVerdict verdict;
-    if (escalate) {
-      verdict = RecordingVerdict.escalated;
-    } else if (finalRiskScore >= 0.7) {
-      verdict = RecordingVerdict.flagged;
-    } else {
-      verdict = RecordingVerdict.safe;
+  Future<void> _endCall(double finalRiskScore, {bool escalate = false}) async {
+    if (_vadStarted) {
+      await _vadHandler.stopListening();
     }
+
+    RecordingVerdict verdict = escalate
+        ? RecordingVerdict.escalated
+        : (finalRiskScore >= 0.7
+            ? RecordingVerdict.flagged
+            : RecordingVerdict.safe);
 
     final now = DateTime.now();
     final timeString = DateFormat('MMM d, h:mm a').format(now);
@@ -65,10 +171,9 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
       durationInSeconds: _seconds,
     );
 
-    // Add directly to the Hive Box! No clearing required.
     Hive.box<RecordingLog>("RecordingBox").add(newLog);
 
-    Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _showEscalationSheet(BuildContext context, double currentRiskScore) {
@@ -118,6 +223,7 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
               variant: ButtonVariant.outline,
               onPressed: () => Navigator.of(context).pop(),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -180,8 +286,11 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
                     ),
                   ),
                 ),
-                _buildDetectionSignals(riskScore),
-                const SizedBox(height: 20),
+
+                // Audio Visualizer Bar
+                _buildAudioVisualizer(),
+
+                const SizedBox(height: 30),
                 _buildActionButtons(context, riskColor, riskScore),
                 const SizedBox(height: 24),
               ],
@@ -195,24 +304,39 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
   Widget _buildCallerHeader(BuildContext context) {
     return Column(
       children: [
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
           width: 88,
           height: 88,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.bgSurface,
-            border: Border.all(color: AppColors.border, width: 1.5),
+            // Subtly change background when speaking
+            color: _isSpeaking
+                ? AppColors.safeGreen.withValues(alpha: 0.1)
+                : AppColors.bgSurface,
+            border: Border.all(
+                // Highlight border when speaking
+                color: _isSpeaking ? AppColors.safeGreen : AppColors.border,
+                width: 1.5),
           ),
-          child:
-              const Icon(Icons.mic, color: AppColors.textSecondary, size: 44),
+          child: Icon(Icons.mic,
+              color:
+                  _isSpeaking ? AppColors.safeGreen : AppColors.textSecondary,
+              size: 44),
         ),
         const SizedBox(height: 14),
-        const Text(
-          "Listening...",
-          style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w700),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            // Change text dynamically based on VAD state
+            _isSpeaking ? "Speech Detected" : "Listening (Noise)...",
+            key: ValueKey<bool>(_isSpeaking),
+            style: TextStyle(
+                color:
+                    _isSpeaking ? AppColors.safeGreen : AppColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w700),
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -253,43 +377,33 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
     );
   }
 
-  Widget _buildDetectionSignals(double riskScore) {
-    final signals = [
-      ('Spectral Anomaly', riskScore > 0.3),
-      ('Pitch Consistency', riskScore > 0.55),
-      ('Background Noise Match', riskScore > 0.7),
-    ];
-    return Padding(
+  Widget _buildAudioVisualizer() {
+    return Container(
+      height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: signals.map((s) {
-          final flagged = s.$2;
-          final color = flagged ? AppColors.dangerRed : AppColors.safeGreen;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: List.generate(5, (index) {
+          // Add slight variations so the bars bounce differently like a real wave
+          final variation = [0.6, 1.0, 0.8, 1.0, 0.6][index];
+
+          // If speaking, bars jump higher. If noise, they stay low.
+          final activeAmplitude = _isSpeaking ? _amplitude : (_amplitude * 0.2);
+          final barHeight = 4.0 + (activeAmplitude * 36 * variation);
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: 8,
+            height: barHeight,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(flagged ? Icons.close_rounded : Icons.check_rounded,
-                    color: color, size: 13),
-                const SizedBox(width: 4),
-                Text(s.$1,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600)),
-              ],
+              // Turn green when speaking, cyan when silent/noise
+              color: _isSpeaking ? AppColors.safeGreen : AppColors.accentCyan,
+              borderRadius: BorderRadius.circular(4),
             ),
           );
-        }).toList(),
+        }),
       ),
     );
   }

@@ -28,13 +28,16 @@ dependencies:
   phone_state: ^3.0.0
 
   # Runtime permission prompts (READ_PHONE_STATE, etc.)
-  permission_handler: ^11.3.1
+  permission_handler: 13.0.0
 
   # Slideable actions
   flutter_slidable: ^4.0.3
 
   #Storing recordings and other data locally
   hive_flutter: ^1.1.0
+  record: ^6.2.1
+
+  vad: ^0.0.8
 
 dev_dependencies:
   flutter_test:
@@ -51,3 +54,7 @@ flutter_launcher_icons:
   ios: true
   image_path: "assets/appIcon.png"
   min_sdk_android: 21
+
+dependency_overrides:
+  permission_handler: 13.0.0
+  permission_handler_android: 13.0.0
