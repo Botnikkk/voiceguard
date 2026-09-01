@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../models/call_log.dart';
+import '../../../models/recording_log.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -11,12 +11,14 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  CallVerdict? _filter;
+  RecordingVerdict? _filter;
 
   @override
   Widget build(BuildContext context) {
-    final allLogs = CallLog.dummyList();
-    final logs = _filter == null ? allLogs : allLogs.where((l) => l.verdict == _filter).toList();
+    final allLogs = RecordingLog.dummyList();
+    final logs = _filter == null
+        ? allLogs
+        : allLogs.where((l) => l.verdict == _filter).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Call Logs')),
@@ -29,11 +31,11 @@ class _LogsScreenState extends State<LogsScreen> {
                 children: [
                   _filterChip('All', null),
                   const SizedBox(width: 8),
-                  _filterChip('Safe', CallVerdict.safe),
+                  _filterChip('Safe', RecordingVerdict.safe),
                   const SizedBox(width: 8),
-                  _filterChip('Flagged', CallVerdict.flagged),
+                  _filterChip('Flagged', RecordingVerdict.flagged),
                   const SizedBox(width: 8),
-                  _filterChip('Escalated', CallVerdict.escalated),
+                  _filterChip('Escalated', RecordingVerdict.escalated),
                 ],
               ),
             ),
@@ -51,7 +53,7 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
-  Widget _filterChip(String label, CallVerdict? verdict) {
+  Widget _filterChip(String label, RecordingVerdict? verdict) {
     final selected = _filter == verdict;
     return ChoiceChip(
       label: Text(label),
@@ -64,23 +66,24 @@ class _LogsScreenState extends State<LogsScreen> {
         fontWeight: FontWeight.w600,
         fontSize: 12.5,
       ),
-      side: BorderSide(color: selected ? AppColors.accentBlue : AppColors.border),
+      side:
+          BorderSide(color: selected ? AppColors.accentBlue : AppColors.border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
 }
 
 class _LogDetailTile extends StatelessWidget {
-  final CallLog log;
+  final RecordingLog log;
   const _LogDetailTile({required this.log});
 
   String get _verdictLabel {
     switch (log.verdict) {
-      case CallVerdict.safe:
+      case RecordingVerdict.safe:
         return 'SAFE';
-      case CallVerdict.flagged:
+      case RecordingVerdict.flagged:
         return 'FLAGGED';
-      case CallVerdict.escalated:
+      case RecordingVerdict.escalated:
         return 'ESCALATED';
     }
   }
@@ -101,8 +104,11 @@ class _LogDetailTile extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(log.callerName,
-                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14.5)),
+                child: Text(log.recordingName,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5)),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -111,21 +117,26 @@ class _LogDetailTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(_verdictLabel,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.5)),
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10.5,
+                        letterSpacing: 0.5)),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(log.callerNumber, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
           const SizedBox(height: 12),
           Row(
             children: [
-              _metaChip(Icons.percent_rounded, '${(log.riskScore * 100).toStringAsFixed(0)}% risk'),
+              _metaChip(Icons.percent_rounded,
+                  '${(log.riskScore * 100).toStringAsFixed(0)}% risk'),
               const SizedBox(width: 8),
-              _metaChip(Icons.timer_outlined, '${log.duration.inMinutes}m ${log.duration.inSeconds % 60}s'),
+              _metaChip(Icons.timer_outlined,
+                  '${log.duration.inMinutes}m ${log.duration.inSeconds % 60}s'),
               const Spacer(),
               Text(DateFormat('MMM d, h:mm a').format(log.timestamp),
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                  style: const TextStyle(
+                      color: AppColors.textMuted, fontSize: 11)),
             ],
           ),
         ],
@@ -139,7 +150,9 @@ class _LogDetailTile extends StatelessWidget {
       children: [
         Icon(icon, size: 13, color: AppColors.textSecondary),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5)),
+        Text(label,
+            style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 11.5)),
       ],
     );
   }

@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../models/call_log.dart';
+import '../../../models/recording_log.dart';
 import '../../call_analysis/screens/live_call_screen.dart';
 import '../../logs/screens/logs_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../widgets/call_summary_card.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final logs = CallLog.dummyList();
-    final safeCount = logs.where((l) => l.verdict == CallVerdict.safe).length;
+    final logs = RecordingLog.dummyList();
+    final safeCount =
+        logs.where((l) => l.verdict == RecordingVerdict.safe).length;
     final flaggedCount =
-        logs.where((l) => l.verdict != CallVerdict.safe).length;
+        logs.where((l) => l.verdict != RecordingVerdict.safe).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -158,13 +160,13 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class _CallLogTile extends StatelessWidget {
-  final CallLog log;
+  final RecordingLog log;
   const _CallLogTile({required this.log});
 
   @override
   Widget build(BuildContext context) {
     final color = AppColors.riskColor(log.riskScore);
-    final isSafe = log.verdict == CallVerdict.safe;
+    final isSafe = log.verdict == RecordingVerdict.safe;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -187,20 +189,11 @@ class _CallLogTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(log.callerName,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14)),
-                const SizedBox(height: 2),
-                Text(log.callerNumber,
-                    style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12)),
-              ],
-            ),
+            child: Text(log.recordingName,
+                style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14)),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,

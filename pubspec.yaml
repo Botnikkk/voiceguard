@@ -30,6 +30,9 @@ dependencies:
   # Runtime permission prompts (READ_PHONE_STATE, etc.)
   permission_handler: ^11.3.1
 
+  # Slideable actions
+  flutter_slidable: ^4.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
