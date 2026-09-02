@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// Make sure this path matches your project structure
+import '../../../../core/services/settings_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
@@ -109,6 +112,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildFormCard(bool isLoading) {
+    // Check if the user has biometrics enabled in their settings
+    final isBiometricEnabled = SettingsService.instance.biometricLock.value;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -174,27 +180,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   _passwordController.text,
                 ),
           ),
-          const SizedBox(height: 16),
-          const Row(
-            children: [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('OR',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-              ),
-              Expanded(child: Divider()),
-            ],
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: isLoading
-                ? null
-                : () => ref.read(authProvider.notifier).loginWithBiometrics(),
-            icon: const Icon(Icons.fingerprint,
-                color: AppColors.accentCyan, size: 22),
-            label: const Text('Login with Biometrics / Face ID'),
-          ),
+
+          // Conditionally render the biometric options based on the setting
+          if (isBiometricEnabled) ...[
+            const SizedBox(height: 16),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('OR',
+                      style:
+                          TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: isLoading
+                  ? null
+                  : () => ref.read(authProvider.notifier).loginWithBiometrics(),
+              icon: const Icon(Icons.fingerprint,
+                  color: AppColors.accentCyan, size: 22),
+              label: const Text('Login with Biometrics / Face ID'),
+            ),
+          ],
         ],
       ),
     );

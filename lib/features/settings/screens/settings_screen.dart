@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Placeholder;
 import 'package:voiceguard/features/auth/screens/login_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../core/services/settings_service.dart';
+import '../../../features/placeholder.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,11 +13,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _realTimeScanning = true;
-  bool _autoEscalate = false;
-  bool _biometricLock = true;
-  double _sensitivity = 0.7;
-
   void _logOut() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -30,20 +27,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _sectionLabel('DETECTION'),
-          _switchTile(
-            title: 'Real-Time Scanning',
-            subtitle: 'Continuously analyze active calls for cloned voices',
-            value: _realTimeScanning,
-            onChanged: (v) => setState(() => _realTimeScanning = v),
-          ),
-          _switchTile(
-            title: 'Auto-Escalate High Risk',
-            subtitle: 'Automatically notify fraud team above 85% risk',
-            value: _autoEscalate,
-            onChanged: (v) => setState(() => _autoEscalate = v),
-          ),
-          const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -62,12 +45,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Text('Higher sensitivity flags more calls for review',
                     style: TextStyle(
                         color: AppColors.textSecondary, fontSize: 12.5)),
-                Slider(
-                  value: _sensitivity,
-                  activeColor: AppColors.accentCyan,
-                  inactiveColor: AppColors.border,
-                  onChanged: (v) => setState(() => _sensitivity = v),
-                ),
+                Row(
+                  children: [
+                    Expanded(
+                        child: Slider(
+                      value: SettingsService.instance.sensitivity.value,
+                      min: 0,
+                      max: 100,
+                      onChanged: (val) {
+                        setState(() {
+                          SettingsService.instance.setSensitivity(val);
+                        });
+                      },
+                    )),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${SettingsService.instance.sensitivity.value.toInt()}%',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                )
               ],
             ),
           ),
@@ -76,23 +76,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _switchTile(
             title: 'Biometric App Lock',
             subtitle: 'Require Face ID / fingerprint to open the app',
-            value: _biometricLock,
-            onChanged: (v) => setState(() => _biometricLock = v),
+            value: SettingsService.instance.biometricLock.value,
+            onChanged: (v) {
+              setState(() {
+                SettingsService.instance.setBiometricLock(v);
+              });
+            },
           ),
           const SizedBox(height: 20),
           _sectionLabel('ACCOUNT'),
-          _navTile(icon: Icons.person_outline, label: 'Analyst Profile'),
+          _navTile(
+              icon: Icons.person_outline,
+              label: 'Analyst Profile',
+              redirect: (BuildContext p1) {
+                return const Placeholder(title: 'Analyst Profile');
+              }),
           _navTile(
               icon: Icons.notifications_outlined,
-              label: 'Notification Preferences'),
-          _navTile(icon: Icons.info_outline, label: 'About VoiceGuard AI'),
+              label: 'Notification Preferences',
+              redirect: (BuildContext p1) {
+                return const Placeholder(title: 'Notification Preferences');
+              }),
+          _navTile(
+              icon: Icons.info_outline,
+              label: 'About VoiceGuard AI',
+              redirect: (BuildContext p1) {
+                return const Placeholder(title: 'About VoiceGuard AI');
+              }),
           CustomButton(
             label: 'LOG OUT',
             icon: Icons.logout_rounded,
             variant: ButtonVariant.danger,
             onPressed: () => _logOut(),
           ),
-          const SizedBox(height: 40),
         ],
       ),
     );
@@ -140,8 +156,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _navTile(
-      {required IconData icon, required String label, Color? color}) {
+  Widget _navTile({
+    required IconData icon,
+    required String label,
+    required Widget Function(BuildContext) redirect,
+    Color? color,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -151,14 +171,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: ListTile(
         leading: Icon(icon, color: color ?? AppColors.textSecondary),
-        title: Text(label,
-            style: TextStyle(
-                color: color ?? AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 14.5)),
+        title: Text(
+          label,
+          style: TextStyle(
+              color: color ?? AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14.5),
+        ),
         trailing:
             const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-        onTap: () {},
+        // Pass the redirect function directly to the builder
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: redirect),
+        ),
       ),
     );
   }

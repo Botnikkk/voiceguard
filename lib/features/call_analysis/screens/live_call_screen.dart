@@ -8,8 +8,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vad/vad.dart';
 
+import '../../../core/services/settings_service.dart';
 import '../../../models/recording_log.dart';
-
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/risk_gauge.dart';
@@ -112,21 +112,27 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
     final status = await Permission.microphone.request();
     if (!status.isGranted) return;
 
+    // 1. Fetch the 0-100 value from your SettingsService
+    final sensitivity = SettingsService.instance.sensitivity.value;
+
+    // 2. Map the 0-100 slider to a 0.9 to 0.1 VAD threshold
+    // 0% sensitivity = 0.9 threshold (Strict, loud rooms)
+    // 50% sensitivity = 0.5 threshold (Default)
+    // 100% sensitivity = 0.1 threshold (Highly sensitive, quiet rooms)
+    final double positiveThreshold = 0.9 - ((sensitivity / 100) * 0.8);
+
+    // Negative threshold is usually ~0.15 lower than positive to prevent flickering
+    final double negativeThreshold =
+        (positiveThreshold - 0.15).clamp(0.05, 0.95);
+
     await _vadHandler.startListening(
       model: 'v5',
-      // How confident the model must be to flag a frame as speech.
-      // Raise this (e.g. 0.6-0.7) if you still get false positives in a
-      // very noisy/crowded room; lower it if quiet speakers get missed.
-      positiveSpeechThreshold: 0.5,
-      negativeSpeechThreshold: 0.35,
-      // How many consecutive speech frames are needed before it counts
-      // as "real" speech rather than a misfire. Raise for stricter
-      // filtering of brief noise spikes (coughs, taps, chair scrapes).
+      positiveSpeechThreshold: positiveThreshold,
+      negativeSpeechThreshold: negativeThreshold,
       minSpeechFrames: 3,
-      // How many consecutive non-speech frames to wait before declaring
-      // speech ended - a built-in version of your old hangover timer.
       redemptionFrames: 8,
     );
+
     if (mounted) setState(() => _vadStarted = true);
   }
 
@@ -163,7 +169,7 @@ class _LiveCallScreenState extends ConsumerState<LiveCallScreen> {
 
     final newLog = RecordingLog(
       id: 'c-${now.millisecondsSinceEpoch}',
-      recordingName: 'Call - $timeString',
+      recordingName: 'Recording - $timeString',
       timestamp: now,
       riskScore: finalRiskScore,
       verdict: verdict,

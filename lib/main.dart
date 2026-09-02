@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/services/call_detection_service.dart';
+import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'package:voiceguard/models/recording_log.dart';
@@ -16,6 +17,9 @@ void main() async {
   Hive.registerAdapter(RecordingVerdictAdapter());
 
   await Hive.openBox<RecordingLog>("RecordingBox");
+
+  WidgetsFlutterBinding.ensureInitialized();
+  await SettingsService.instance.init();
 
   runApp(const ProviderScope(child: VoiceGuardApp()));
 }
