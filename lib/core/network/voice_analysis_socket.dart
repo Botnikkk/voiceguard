@@ -18,8 +18,9 @@ class VoiceAnalysisSocket {
   VoiceAnalysisSocket(this.url);
 
   void connect() {
-    if (_isDisposed)
-      return; // guard against a zombie reconnect firing post-dispose
+    if (_isDisposed) {
+      return;
+    } // guard against a zombie reconnect firing post-dispose
     try {
       _channel = WebSocketChannel.connect(Uri.parse(url));
       _channel!.stream.listen(

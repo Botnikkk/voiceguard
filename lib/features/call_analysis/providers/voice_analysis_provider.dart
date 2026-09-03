@@ -48,6 +48,7 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
     }));
   }
 
+  // voice_analysis_provider.dart
   Future<void> startListening() async {
     if (_isListening) return;
 
@@ -67,6 +68,21 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
       negativeSpeechThreshold: negativeThreshold,
       minSpeechFrames: 3,
       redemptionFrames: 20,
+      numFramesToEmit: 16,
+      recordConfig: const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+        echoCancel: true,
+        noiseSuppress: true,
+        autoGain: true,
+        androidConfig: AndroidRecordConfig(
+          audioSource: AndroidAudioSource.voiceCommunication,
+          audioManagerMode: AudioManagerMode.modeInCommunication,
+          speakerphone: true,
+          manageBluetooth: true,
+        ),
+      ),
     );
 
     _isListening = true;
@@ -77,31 +93,37 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
       state = state.copyWith(isSpeaking: true);
     }));
 
+    // Keep onFrameProcessed ONLY for the amplitude visualizer — not for streaming audio out
     _subscriptions.add(_vadHandler!.onFrameProcessed.listen((frameData) {
       final frame = frameData.frame;
       if (frame.isEmpty) return;
-
       double sumSquares = 0.0;
       for (final sample in frame) {
         sumSquares += sample * sample;
       }
       final double rms = math.sqrt(sumSquares / frame.length);
-
       final double normalized = (rms * 12.0).clamp(0.0, 1.0);
 
       final double displayAmplitude = state.isSpeaking
           ? normalized
           : (normalized < 0.15 ? 0.05 : normalized);
-
       state = state.copyWith(amplitude: displayAmplitude);
     }));
 
-    _subscriptions.add(_vadHandler!.onSpeechEnd.listen((samples) {
-      state = state.copyWith(isSpeaking: false);
-
-      if (samples.isNotEmpty) {
-        _socket.sendAudioChunk(samples);
+    // NEW: package-native streaming chunk emission — this is the correct source for continuous audio out
+    _subscriptions.add(_vadHandler!.onEmitChunk.listen((chunkData) {
+      if (chunkData.samples.isNotEmpty) {
+        _socket.sendAudioChunk(chunkData.samples);
       }
+      if (chunkData.isFinal) {
+        _socket.sendEndSignal();
+      }
+    }));
+
+    _subscriptions.add(_vadHandler!.onSpeechEnd.listen((_) {
+      state = state.copyWith(isSpeaking: false);
+      // audio itself is now handled by onEmitChunk's isFinal flag above —
+      // no need to send samples here anymore
     }));
 
     _subscriptions.add(_vadHandler!.onVADMisfire.listen((_) {
