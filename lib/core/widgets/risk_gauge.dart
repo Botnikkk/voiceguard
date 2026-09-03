@@ -2,21 +2,17 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// A prominent circular "AI Risk Score" gauge.
-/// Sweeps from neon green (safe) through amber (caution) to harsh red (danger)
-/// as [score] (0.0 - 1.0) increases. Animates smoothly between value changes
-/// and pulses a soft glow when in the danger zone.
 class RiskGauge extends StatelessWidget {
   final double score; // 0.0 - 1.0
+  final String label; // NEW: Driven dynamically by the AI backend
   final double size;
 
-  const RiskGauge({super.key, required this.score, this.size = 240});
-
-  String get _label {
-    if (score < 0.4) return 'LOW RISK';
-    if (score < 0.7) return 'CAUTION';
-    return 'HIGH RISK';
-  }
+  const RiskGauge({
+    super.key,
+    required this.score,
+    required this.label,
+    this.size = 240,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +53,7 @@ class RiskGauge extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _label,
+                    "AI GENERATED",
                     style: TextStyle(
                       color: animatedColor,
                       fontSize: 13,
@@ -107,7 +103,7 @@ class _GaugePainter extends CustomPainter {
     final progressPaint = Paint()
       ..shader = const SweepGradient(
         startAngle: 0.0,
-        endAngle: pi * 2, // 1. Expand to map over the full 360-degree circle
+        endAngle: pi * 2,
         colors: [
           AppColors.safeGreen, // 0.0 - Start
           AppColors.cautionAmber, // 0.375 - Middle
@@ -117,21 +113,13 @@ class _GaugePainter extends CustomPainter {
           AppColors
               .safeGreen, // 1.0 - Wraps to 0.0, making the start cap green!
         ],
-        stops: [
-          0.0,
-          0.375, // 50% of the 0.75 arc
-          0.75, // 270deg is exactly 75% of a 360deg circle
-          0.85,
-          0.8501,
-          1.0,
-        ],
+        stops: [0.0, 0.375, 0.75, 0.85, 0.8501, 1.0],
         transform: GradientRotation(startAngle),
       ).createShader(Rect.fromCircle(center: center, radius: radius))
       ..strokeWidth = 14
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // 2. Prevent a 0-sweep round cap from rendering a dot at origin
     if (progress > 0.001) {
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
