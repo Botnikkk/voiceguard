@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/data/database.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../models/recording_log.dart';
-import '../../call_analysis/screens/live_call_screen.dart';
+import '../widgets/action_drawer.dart';
 import '../../logs/screens/logs_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../widgets/call_summary_card.dart';
@@ -118,13 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
           ),
-          floatingActionButton: FloatingActionButton(
-            backgroundColor: AppColors.accentBlue,
-            child: const Icon(Icons.mic, color: Colors.white),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LiveCallScreen()),
-            ),
-          ),
+          floatingActionButton: const ActionDrawerWidget(),
         );
       },
     );

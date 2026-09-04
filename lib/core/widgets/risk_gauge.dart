@@ -4,7 +4,7 @@ import '../theme/app_colors.dart';
 
 class RiskGauge extends StatelessWidget {
   final double score; // 0.0 - 1.0
-  final String label; // NEW: Driven dynamically by the AI backend
+  final String label;
   final double size;
 
   const RiskGauge({
