@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-import 'core/services/call_detection_service.dart';
 import 'core/services/settings_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -38,8 +37,6 @@ class _VoiceGuardAppState extends State<VoiceGuardApp> {
   @override
   void initState() {
     super.initState();
-
-    CallDetectionService.instance.start();
   }
 
   @override

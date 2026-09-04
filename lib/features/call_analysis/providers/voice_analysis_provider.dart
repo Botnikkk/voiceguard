@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vad/vad.dart';
+import '../../../core/network/api_config.dart';
 import '../../../core/network/voice_analysis_socket.dart';
 import '../../../core/services/settings_service.dart';
 import '../../../models/analysis_result.dart';
@@ -30,8 +31,7 @@ class VoiceAnalysisState {
 
 final voiceAnalysisProvider = StateNotifierProvider.autoDispose<
     VoiceAnalysisNotifier, VoiceAnalysisState>((ref) {
-  final socket = VoiceAnalysisSocket(
-      'ws://relieving-alone-rewind.ngrok-free.dev/ws/detect');
+  final socket = VoiceAnalysisSocket(ApiConfig.voiceAnalysisWsUrl);
   return VoiceAnalysisNotifier(socket);
 });
 
@@ -48,7 +48,6 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
     }));
   }
 
-  // voice_analysis_provider.dart
   Future<void> startListening() async {
     if (_isListening) return;
 
@@ -93,7 +92,6 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
       state = state.copyWith(isSpeaking: true);
     }));
 
-    // Keep onFrameProcessed ONLY for the amplitude visualizer — not for streaming audio out
     _subscriptions.add(_vadHandler!.onFrameProcessed.listen((frameData) {
       final frame = frameData.frame;
       if (frame.isEmpty) return;
@@ -110,7 +108,6 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
       state = state.copyWith(amplitude: displayAmplitude);
     }));
 
-    // NEW: package-native streaming chunk emission — this is the correct source for continuous audio out
     _subscriptions.add(_vadHandler!.onEmitChunk.listen((chunkData) {
       if (chunkData.samples.isNotEmpty) {
         _socket.sendAudioChunk(chunkData.samples);
@@ -122,8 +119,6 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
 
     _subscriptions.add(_vadHandler!.onSpeechEnd.listen((_) {
       state = state.copyWith(isSpeaking: false);
-      // audio itself is now handled by onEmitChunk's isFinal flag above —
-      // no need to send samples here anymore
     }));
 
     _subscriptions.add(_vadHandler!.onVADMisfire.listen((_) {
