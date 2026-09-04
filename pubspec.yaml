@@ -40,6 +40,7 @@ dependencies:
   vad: ^0.0.8
 
   shared_preferences: ^2.5.5
+  web: 1.1.1
   web_socket_channel: ^3.0.3
   file_picker: ^11.0.3
   ffmpeg_kit_flutter_new: 4.6.2
