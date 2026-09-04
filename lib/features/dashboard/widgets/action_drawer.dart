@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:voiceguard/features/call_analysis/screens/live_call_screen.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../call_analysis/screens/upload_audio_screen.dart';
@@ -107,7 +108,7 @@ class ActionDrawerWidget extends StatelessWidget {
                     Navigator.pop(context);
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => const Placeholder()),
+                          builder: (_) => const LiveCallInterceptScreen()),
                     );
                   },
                 ),

@@ -178,43 +178,53 @@ class _MicDetectionScreenState extends ConsumerState<MicDetectionScreen> {
                   _buildCallerHeader(voiceState.isSpeaking),
                   const SizedBox(height: 28),
                   Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('AI RISK ANALYSIS',
-                              style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 2)),
-                          const SizedBox(height: 24),
-                          RiskGauge(
-                            score: riskScore,
-                            label: voiceState.analysis.verdict,
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: FittedBox(
+                        fit: BoxFit
+                            .scaleDown, // Shrinks the UI proportionally if it runs out of height
+                        child: SizedBox(
+                          // We constrain the width so your Chips and Text still wrap properly horizontally
+                          width: MediaQuery.of(context).size.width - 32,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildInfoChip(
-                                  "Verdict",
-                                  voiceState.analysis.verdict,
-                                  Icons.gavel_rounded),
-                              const SizedBox(width: 8),
-                              _buildInfoChip(
-                                  "Confidence",
-                                  voiceState.analysis.confidence,
-                                  Icons.analytics_outlined),
+                              const Text('AI RISK ANALYSIS',
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 2)),
+                              const SizedBox(height: 24),
+                              RiskGauge(
+                                score: riskScore,
+                                label: voiceState.analysis.verdict,
+                              ),
+                              const SizedBox(height: 16),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 8.0,
+                                runSpacing: 8.0,
+                                children: [
+                                  _buildInfoChip(
+                                      "Verdict",
+                                      voiceState.analysis.verdict,
+                                      Icons.gavel_rounded),
+                                  _buildInfoChip(
+                                      "Confidence",
+                                      voiceState.analysis.confidence,
+                                      Icons.analytics_outlined),
+                                ],
+                              ),
+                              const SizedBox(height: 28),
+                              AnimatedOpacity(
+                                opacity: isDanger ? 1 : 0,
+                                duration: const Duration(milliseconds: 400),
+                                child: _buildDangerBanner(),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 28),
-                          AnimatedOpacity(
-                            opacity: isDanger ? 1 : 0,
-                            duration: const Duration(milliseconds: 400),
-                            child: _buildDangerBanner(),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),

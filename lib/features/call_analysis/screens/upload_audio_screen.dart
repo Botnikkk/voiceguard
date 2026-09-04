@@ -184,12 +184,13 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
               label: state.analysis.verdict,
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8.0,
+              runSpacing: 8.0,
               children: [
                 _buildInfoChip(
                     "Verdict", state.analysis.verdict, Icons.gavel_rounded),
-                const SizedBox(width: 8),
                 _buildInfoChip("Confidence", state.analysis.confidence,
                     Icons.analytics_outlined),
               ],

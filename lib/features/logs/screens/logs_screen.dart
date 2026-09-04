@@ -54,16 +54,19 @@ class _LogsScreenState extends State<LogsScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                    child: Row(
-                      children: [
-                        _filterChip('All', null),
-                        const SizedBox(width: 8),
-                        _filterChip('Safe', RecordingVerdict.safe),
-                        const SizedBox(width: 8),
-                        _filterChip('Flagged', RecordingVerdict.flagged),
-                        const SizedBox(width: 8),
-                        _filterChip('Escalated', RecordingVerdict.escalated),
-                      ],
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _filterChip('All', null),
+                          const SizedBox(width: 8),
+                          _filterChip('Safe', RecordingVerdict.safe),
+                          const SizedBox(width: 8),
+                          _filterChip('Flagged', RecordingVerdict.flagged),
+                          const SizedBox(width: 8),
+                          _filterChip('Escalated', RecordingVerdict.escalated),
+                        ],
+                      ),
                     ),
                   ),
                   Expanded(
