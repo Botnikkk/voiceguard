@@ -11,7 +11,7 @@ class Mp3Decoder {
 
     // 2. Decode the audio data
     final promise = context.decodeAudioData(mp3Bytes.buffer.toJS);
-    final web.AudioBuffer audioBuffer = await promise.toDart as web.AudioBuffer;
+    final web.AudioBuffer audioBuffer = await promise.toDart;
 
     // 3. Extract Float32List (which implements List<double>) normalized to [-1.0, 1.0]
     final Float32List channelData = audioBuffer.getChannelData(0).toDart;
