@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/data/database.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/web_constraint.dart';
 import '../../../models/recording_log.dart';
 import '../widgets/action_drawer.dart';
 import '../../logs/screens/logs_screen.dart';
@@ -57,65 +58,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(width: 8),
             ],
           ),
-          body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-              children: [
-                _buildSystemStatusCard(context),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SummaryStatCard(
-                        label: 'Safe Calls Today',
-                        value: '$safeCount',
-                        icon: Icons.verified_user_outlined,
-                        color: AppColors.safeGreen,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: SummaryStatCard(
-                        label: 'Flagged / Escalated',
-                        value: '$flaggedCount',
-                        icon: Icons.gpp_maybe_outlined,
-                        color: AppColors.dangerRed,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _buildSectionHeader(
-                  context,
-                  'Recent Activity',
-                  onSeeAll: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LogsScreen()),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Render logs or an empty placeholder
-                if (logs.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.bgSurface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'No recordings yet',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
+          body: WebConstraint(
+            child: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                children: [
+                  _buildSystemStatusCard(context),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SummaryStatCard(
+                          label: 'Safe Calls Today',
+                          value: '$safeCount',
+                          icon: Icons.verified_user_outlined,
+                          color: AppColors.safeGreen,
                         ),
                       ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: SummaryStatCard(
+                          label: 'Flagged / Escalated',
+                          value: '$flaggedCount',
+                          icon: Icons.gpp_maybe_outlined,
+                          color: AppColors.dangerRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader(
+                    context,
+                    'Recent Activity',
+                    onSeeAll: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LogsScreen()),
                     ),
-                  )
-                else
-                  ...logs.take(4).map((log) => _CallLogTile(log: log)),
-              ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Render logs or an empty placeholder
+                  if (logs.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgSurface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'No recordings yet',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...logs.take(4).map((log) => _CallLogTile(log: log)),
+                ],
+              ),
             ),
           ),
           floatingActionButton: const ActionDrawerWidget(),

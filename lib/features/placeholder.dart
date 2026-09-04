@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 
 class Placeholder extends StatelessWidget {
   const Placeholder({super.key, required this.title});
@@ -8,8 +9,10 @@ class Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Text(title),
+      body: WebConstraint(
+        child: Center(
+          child: Text(title),
+        ),
       ),
     );
   }

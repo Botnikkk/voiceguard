@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -155,73 +156,75 @@ class _MicDetectionScreenState extends ConsumerState<MicDetectionScreen> {
       canPop: false,
       child: Scaffold(
         backgroundColor: AppColors.bgDeepest,
-        body: SafeArea(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  isDanger
-                      ? AppColors.dangerRedDim.withValues(alpha: 0.5)
-                      : AppColors.bgDeepest,
-                  AppColors.bgDeepest
-                ],
+        body: WebConstraint(
+          child: SafeArea(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 500),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    isDanger
+                        ? AppColors.dangerRedDim.withValues(alpha: 0.5)
+                        : AppColors.bgDeepest,
+                    AppColors.bgDeepest
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                const SizedBox(height: 8),
-                _buildCallerHeader(voiceState.isSpeaking),
-                const SizedBox(height: 28),
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('AI RISK ANALYSIS',
-                            style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 2)),
-                        const SizedBox(height: 24),
-                        RiskGauge(
-                          score: riskScore,
-                          label: voiceState.analysis.verdict,
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildInfoChip(
-                                "Verdict",
-                                voiceState.analysis.verdict,
-                                Icons.gavel_rounded),
-                            const SizedBox(width: 8),
-                            _buildInfoChip(
-                                "Confidence",
-                                voiceState.analysis.confidence,
-                                Icons.analytics_outlined),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-                        AnimatedOpacity(
-                          opacity: isDanger ? 1 : 0,
-                          duration: const Duration(milliseconds: 400),
-                          child: _buildDangerBanner(),
-                        ),
-                      ],
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  _buildCallerHeader(voiceState.isSpeaking),
+                  const SizedBox(height: 28),
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('AI RISK ANALYSIS',
+                              style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 2)),
+                          const SizedBox(height: 24),
+                          RiskGauge(
+                            score: riskScore,
+                            label: voiceState.analysis.verdict,
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _buildInfoChip(
+                                  "Verdict",
+                                  voiceState.analysis.verdict,
+                                  Icons.gavel_rounded),
+                              const SizedBox(width: 8),
+                              _buildInfoChip(
+                                  "Confidence",
+                                  voiceState.analysis.confidence,
+                                  Icons.analytics_outlined),
+                            ],
+                          ),
+                          const SizedBox(height: 28),
+                          AnimatedOpacity(
+                            opacity: isDanger ? 1 : 0,
+                            duration: const Duration(milliseconds: 400),
+                            child: _buildDangerBanner(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                _buildAudioVisualizer(
-                    voiceState.isSpeaking, voiceState.amplitude),
-                const SizedBox(height: 30),
-                _buildActionButtons(context, riskScore),
-                const SizedBox(height: 24),
-              ],
+                  _buildAudioVisualizer(
+                      voiceState.isSpeaking, voiceState.amplitude),
+                  const SizedBox(height: 30),
+                  _buildActionButtons(context, riskScore),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),

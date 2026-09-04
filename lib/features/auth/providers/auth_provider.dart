@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
@@ -42,6 +43,15 @@ class AuthController extends StateNotifier<AuthState> {
   /// Triggers the phone's native biometric prompt.
   Future<void> loginWithBiometrics() async {
     state = state.copyWith(status: AuthStatus.loading);
+
+    // Bypass the native method channel call completely on web platforms
+    if (kIsWeb) {
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: 'Biometric login is not supported on web browsers.',
+      );
+      return;
+    }
 
     try {
       final bool canCheck = await _localAuth.canCheckBiometrics;

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
-// Make sure this path matches your project structure
 import '../../../../core/services/settings_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/widgets/web_constraint.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
 import '../providers/auth_provider.dart';
 
@@ -48,24 +49,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.bgGradient),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildBrandHeader(context),
-                  const SizedBox(height: 40),
-                  _buildFormCard(isLoading),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Authorized personnel only. All access is logged.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                ],
+        child: WebConstraint(
+          width: 600,
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildBrandHeader(context),
+                    const SizedBox(height: 40),
+                    _buildFormCard(isLoading),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Authorized personnel only. All access is logged.',
+                      textAlign: TextAlign.center,
+                      style:
+                          TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

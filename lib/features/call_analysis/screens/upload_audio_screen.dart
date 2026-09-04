@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -104,10 +105,12 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
         backgroundColor: AppColors.bgDeepest,
         title: const Text('Upload Audio File'),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(child: _buildBody(state)),
+      body: WebConstraint(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(child: _buildBody(state)),
+          ),
         ),
       ),
     );

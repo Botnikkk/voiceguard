@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide Placeholder;
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 import 'package:voiceguard/features/auth/screens/login_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
@@ -24,92 +25,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.bgSurface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Detection Sensitivity',
-                    style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                const Text('Higher sensitivity flags more calls for review',
-                    style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12.5)),
-                Row(
-                  children: [
-                    Expanded(
-                        child: Slider(
-                      value: SettingsService.instance.sensitivity.value,
-                      min: 0,
-                      max: 100,
-                      onChanged: (val) {
-                        setState(() {
-                          SettingsService.instance.setSensitivity(val);
-                        });
-                      },
-                    )),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${SettingsService.instance.sensitivity.value.toInt()}%',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12.5,
+      body: WebConstraint(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.bgSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Detection Sensitivity',
+                      style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  const Text('Higher sensitivity flags more calls for review',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12.5)),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: Slider(
+                        value: SettingsService.instance.sensitivity.value,
+                        min: 0,
+                        max: 100,
+                        onChanged: (val) {
+                          setState(() {
+                            SettingsService.instance.setSensitivity(val);
+                          });
+                        },
+                      )),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${SettingsService.instance.sensitivity.value.toInt()}%',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12.5,
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              ],
+                    ],
+                  )
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          _sectionLabel('SECURITY'),
-          _switchTile(
-            title: 'Biometric App Lock',
-            subtitle: 'Require Face ID / fingerprint to open the app',
-            value: SettingsService.instance.biometricLock.value,
-            onChanged: (v) {
-              setState(() {
-                SettingsService.instance.setBiometricLock(v);
-              });
-            },
-          ),
-          const SizedBox(height: 20),
-          _sectionLabel('ACCOUNT'),
-          _navTile(
-              icon: Icons.person_outline,
-              label: 'Analyst Profile',
-              redirect: (BuildContext p1) {
-                return const Placeholder(title: 'Analyst Profile');
-              }),
-          _navTile(
-              icon: Icons.notifications_outlined,
-              label: 'Notification Preferences',
-              redirect: (BuildContext p1) {
-                return const Placeholder(title: 'Notification Preferences');
-              }),
-          _navTile(
-              icon: Icons.info_outline,
-              label: 'About VoiceGuard AI',
-              redirect: (BuildContext p1) {
-                return const Placeholder(title: 'About VoiceGuard AI');
-              }),
-          CustomButton(
-            label: 'LOG OUT',
-            icon: Icons.logout_rounded,
-            variant: ButtonVariant.danger,
-            onPressed: () => _logOut(),
-          ),
-        ],
+            const SizedBox(height: 20),
+            _sectionLabel('SECURITY'),
+            _switchTile(
+              title: 'Biometric App Lock',
+              subtitle: 'Require Face ID / fingerprint to open the app',
+              value: SettingsService.instance.biometricLock.value,
+              onChanged: (v) {
+                setState(() {
+                  SettingsService.instance.setBiometricLock(v);
+                });
+              },
+            ),
+            const SizedBox(height: 20),
+            _sectionLabel('ACCOUNT'),
+            _navTile(
+                icon: Icons.person_outline,
+                label: 'Analyst Profile',
+                redirect: (BuildContext p1) {
+                  return const Placeholder(title: 'Analyst Profile');
+                }),
+            _navTile(
+                icon: Icons.notifications_outlined,
+                label: 'Notification Preferences',
+                redirect: (BuildContext p1) {
+                  return const Placeholder(title: 'Notification Preferences');
+                }),
+            _navTile(
+                icon: Icons.info_outline,
+                label: 'About VoiceGuard AI',
+                redirect: (BuildContext p1) {
+                  return const Placeholder(title: 'About VoiceGuard AI');
+                }),
+            CustomButton(
+              label: 'LOG OUT',
+              icon: Icons.logout_rounded,
+              variant: ButtonVariant.danger,
+              onPressed: () => _logOut(),
+            ),
+          ],
+        ),
       ),
     );
   }
