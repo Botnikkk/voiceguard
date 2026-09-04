@@ -71,8 +71,6 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
     _socket.connect();
     _resultSub = _socket.resultStream.listen((result) {
       if (_disposed) return;
-      debugPrintResult(
-          result); // see note below — remove once confirmed working
 
       // Progress is driven ONLY by what the server confirms it has analyzed,
       // never by how much we've sent. This is what keeps the % bar, the
@@ -97,12 +95,6 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
         progress: result.isFinal ? 1.0 : analyzedFraction,
       );
     });
-  }
-
-  void debugPrintResult(AnalysisResult r) {
-    // ignore: avoid_print
-    print('[upload] got result: score=${r.smoothedScore} verdict=${r.verdict} '
-        'confidence=${r.confidence}');
   }
 
   Future<void> analyzeFile(String fileName, Uint8List bytes) async {
