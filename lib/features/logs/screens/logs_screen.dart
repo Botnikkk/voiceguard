@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 
 import './../../../core/data/database.dart';
 import './../../../core/theme/app_colors.dart';
@@ -47,35 +48,37 @@ class _LogsScreenState extends State<LogsScreen> {
 
         return Scaffold(
           appBar: AppBar(title: const Text('Recordings')),
-          body: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                  child: Row(
-                    children: [
-                      _filterChip('All', null),
-                      const SizedBox(width: 8),
-                      _filterChip('Safe', RecordingVerdict.safe),
-                      const SizedBox(width: 8),
-                      _filterChip('Flagged', RecordingVerdict.flagged),
-                      const SizedBox(width: 8),
-                      _filterChip('Escalated', RecordingVerdict.escalated),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                    itemCount: logs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) => _LogDetailTile(
-                      log: logs[i],
-                      deleteFunction: (context) => deleteFunction(logs[i]),
+          body: WebConstraint(
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                    child: Row(
+                      children: [
+                        _filterChip('All', null),
+                        const SizedBox(width: 8),
+                        _filterChip('Safe', RecordingVerdict.safe),
+                        const SizedBox(width: 8),
+                        _filterChip('Flagged', RecordingVerdict.flagged),
+                        const SizedBox(width: 8),
+                        _filterChip('Escalated', RecordingVerdict.escalated),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      itemCount: logs.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, i) => _LogDetailTile(
+                        log: logs[i],
+                        deleteFunction: (context) => deleteFunction(logs[i]),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
