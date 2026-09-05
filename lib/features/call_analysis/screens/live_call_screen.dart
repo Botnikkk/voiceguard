@@ -2,16 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:voiceguard/core/widgets/web_constraint.dart';
 
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/risk_gauge.dart';
-import '../../../../core/network/device_discovery_service.dart';
 import '../providers/call_intercept_provider.dart';
 import '../providers/audio_bridge_provider.dart';
 import '../providers/live_call_pairing_provider.dart';
 
+/// "Intercept live call". Opens by asking the user whether this phone is
+/// the Sender (streams test call audio out) or the Receiver (hosts the
+/// bridge and runs analysis), then auto-pairs with a nearby phone of the
+/// opposite role over LAN broadcast instead of typing an IP address.
+///
+/// Role selection + pairing lives in live_call_pairing_provider.dart.
+/// The actual audio transport is unchanged: Receiver still drives
+/// call_intercept_provider.dart (WebSocket server -> backend analysis),
+/// Sender still drives audio_bridge_provider.dart's sender (WebSocket
+/// client streaming a picked file at real-time pace).
 class LiveCallInterceptScreen extends ConsumerStatefulWidget {
   const LiveCallInterceptScreen({super.key});
 
@@ -22,13 +32,21 @@ class LiveCallInterceptScreen extends ConsumerStatefulWidget {
 
 class _LiveCallInterceptScreenState
     extends ConsumerState<LiveCallInterceptScreen> {
+  final TextEditingController _codeController = TextEditingController();
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
   String _formattedTime(int seconds) {
     final m = (seconds ~/ 60).toString().padLeft(2, '0');
     final s = (seconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
-  Future<void> _saveAndClose(CallInterceptState state) async {
+  Future<void> _saveLog(CallInterceptState state) async {
     final score = state.analysis.smoothedScore;
     final verdict =
         score >= 0.7 ? RecordingVerdict.flagged : RecordingVerdict.safe;
@@ -42,7 +60,6 @@ class _LiveCallInterceptScreenState
       durationInSeconds: state.callSeconds,
     );
     await Hive.box<RecordingLog>("RecordingBox").add(newLog);
-    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _backToRoleSelection() async {
@@ -51,6 +68,14 @@ class _LiveCallInterceptScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Listen for call ending to auto-save the log
+    ref.listen<CallInterceptState>(callInterceptProvider, (previous, next) {
+      if (previous?.stage == CallInterceptStage.callActive &&
+          next.stage == CallInterceptStage.callEnded) {
+        _saveLog(next);
+      }
+    });
+
     final pairing = ref.watch(liveCallPairingProvider);
 
     return Scaffold(
@@ -59,10 +84,12 @@ class _LiveCallInterceptScreenState
         backgroundColor: AppColors.bgDeepest,
         title: const Text('Intercept Live Call'),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(child: _buildBody(pairing)),
+      body: WebConstraint(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(child: _buildBody(pairing)),
+          ),
         ),
       ),
     );
@@ -98,8 +125,8 @@ class _LiveCallInterceptScreenState
         const SizedBox(height: 8),
         const Text(
           'Receiver hosts the analysis. Sender streams test call audio to '
-          'it. Once you pick, this phone will find nearby phones running '
-          'the opposite role automatically.',
+          'it. After you pick, the Receiver will show a short code — enter '
+          'it on the Sender device to connect.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
@@ -130,7 +157,7 @@ class _LiveCallInterceptScreenState
   }
 
   // -------------------------------------------------------------------
-  // Receiver flow - analysis UI, driven by callInterceptProvider
+  // Receiver flow — unchanged analysis UI, driven by callInterceptProvider
   // -------------------------------------------------------------------
 
   Widget _buildReceiverFlow() {
@@ -142,36 +169,35 @@ class _LiveCallInterceptScreenState
         body = Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Broadcasting as Receiver',
+            const Text('Waiting for the other device',
                 style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             const Text(
-              'Nearby Sender phones will find this automatically. If '
-              'discovery is blocked on this network, connect manually '
-              'using the address below.',
+              'Enter this code on the Sender device to connect.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
-            if (state.localIp != null)
+            if (state.roomCode != null)
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.bgDeepest,
                   border: Border.all(
-                      color: AppColors.textSecondary.withOpacity(0.3)),
+                      color: AppColors.textSecondary.withValues(alpha: 0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${state.localIp}:${state.port}',
+                  state.roomCode!,
                   style: const TextStyle(
                       color: AppColors.accentCyan,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 4),
                 ),
               )
             else
@@ -226,7 +252,9 @@ class _LiveCallInterceptScreenState
                 label: 'Escalate to Fraud Team',
                 icon: Icons.local_police_outlined,
                 variant: ButtonVariant.danger,
-                onPressed: () => _saveAndClose(state),
+                onPressed: () =>
+                    // Ending the call triggers the auto-save seamlessly.
+                    ref.read(callInterceptProvider.notifier).endSimulatedCall(),
               ),
             ],
           ],
@@ -247,17 +275,13 @@ class _LiveCallInterceptScreenState
               score: state.analysis.smoothedScore,
               label: state.analysis.verdict,
             ),
-            const SizedBox(height: 28),
-            CustomButton(
-              label: 'Save to Log',
-              icon: Icons.save_outlined,
-              variant: ButtonVariant.primary,
-              onPressed: () => _saveAndClose(state),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
+            const Text('Log saved automatically.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 24),
             CustomButton(
               label: 'Wait for Another Call',
-              variant: ButtonVariant.outline,
+              variant: ButtonVariant.primary,
               onPressed: () => ref.read(callInterceptProvider.notifier).reset(),
             ),
           ],
@@ -269,10 +293,11 @@ class _LiveCallInterceptScreenState
       mainAxisSize: MainAxisSize.min,
       children: [
         body,
-        const SizedBox(height: 24),
-        TextButton(
+        const SizedBox(height: 16),
+        CustomButton(
+          label: 'Back',
+          variant: ButtonVariant.outline,
           onPressed: _backToRoleSelection,
-          child: const Text('Back'),
         ),
       ],
     );
@@ -288,7 +313,7 @@ class _LiveCallInterceptScreenState
 
     Widget body;
     if (state.stage == SenderStage.idle) {
-      body = _buildNearbyReceiverPicker(pairing);
+      body = _buildRoomCodeEntry(pairing);
     } else if (state.stage == SenderStage.connecting) {
       body = const Column(
         mainAxisSize: MainAxisSize.min,
@@ -339,7 +364,7 @@ class _LiveCallInterceptScreenState
           const SizedBox(height: 16),
           CustomButton(
             label: 'Send Another File',
-            variant: ButtonVariant.outline,
+            variant: ButtonVariant.primary,
             onPressed: notifier.pickAndSendFile,
           ),
         ],
@@ -353,7 +378,7 @@ class _LiveCallInterceptScreenState
           const SizedBox(height: 16),
           CustomButton(
             label: 'Retry',
-            variant: ButtonVariant.outline,
+            variant: ButtonVariant.primary,
             onPressed: () =>
                 ref.read(liveCallPairingProvider.notifier).chooseSender(),
           ),
@@ -371,112 +396,63 @@ class _LiveCallInterceptScreenState
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 16),
         body,
-        const SizedBox(height: 24),
-        TextButton(
+        const SizedBox(height: 16),
+        CustomButton(
+          label: 'Back',
+          variant: ButtonVariant.outline,
           onPressed: () {
             notifier.disconnect();
             _backToRoleSelection();
           },
-          child: const Text('Back'),
         ),
       ],
     );
   }
 
-  Widget _buildNearbyReceiverPicker(LiveCallPairingState pairing) {
-    if (pairing.errorMessage != null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+  Widget _buildRoomCodeEntry(LiveCallPairingState pairing) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Enter the code shown on the Receiver device',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _codeController,
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 4),
+          decoration: InputDecoration(
+            hintText: '000000',
+            filled: true,
+            fillColor: AppColors.bgDeepest,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                  color: AppColors.textSecondary.withValues(alpha: 0.3)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        CustomButton(
+          label: 'Connect',
+          icon: Icons.link_rounded,
+          variant: ButtonVariant.primary,
+          onPressed: () => ref
+              .read(liveCallPairingProvider.notifier)
+              .connectWithCode(_codeController.text),
+        ),
+        if (pairing.errorMessage != null) ...[
+          const SizedBox(height: 16),
           Text('Error: ${pairing.errorMessage}',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.redAccent)),
         ],
-      );
-    }
-
-    if (pairing.nearbyPeers.isEmpty) {
-      return const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Searching for nearby Receiver phones…',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary)),
-        ],
-      );
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('Nearby Receivers',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 260),
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: pairing.nearbyPeers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final DiscoveredPeer peer = pairing.nearbyPeers[index];
-              return _NearbyPeerTile(
-                peer: peer,
-                onTap: () => ref
-                    .read(liveCallPairingProvider.notifier)
-                    .connectToPeer(peer),
-              );
-            },
-          ),
-        ),
       ],
     );
   }
 }
-
-class _NearbyPeerTile extends StatelessWidget {
-  final DiscoveredPeer peer;
-  final VoidCallback onTap;
-
-  const _NearbyPeerTile({required this.peer, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.bgSurfaceElevated,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.phone_android, color: AppColors.accentCyan),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(peer.name,
-                      style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600)),
-                  Text('${peer.ip}:${peer.port}',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12)),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
-      ),
-    );
-  }
-}
-  

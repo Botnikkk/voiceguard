@@ -5,17 +5,19 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../../core/network/api_config.dart';
+import '../../../core/network/signaling_service.dart';
 import '../../../core/network/voice_analysis_socket.dart';
+import '../../../core/network/webrtc_config.dart';
 import '../../../core/utils/wav_decoder.dart';
 import '../../../core/utils/mp3_decoder.dart';
 import '../../../models/analysis_result.dart';
 
 const int kBridgePort = 51234;
-const int kChunkSampleRate = 16000;
-const int kSamplesPerChunk = kChunkSampleRate;
+const int kChunkSampleRate = 16000; // matches your existing VAD/backend rate
+const int kSamplesPerChunk = kChunkSampleRate; // 1 second per chunk
 
 // ---------------------------------------------------------------------
 // SENDER
@@ -57,33 +59,108 @@ class SenderState {
 
 final audioBridgeSenderProvider =
     StateNotifierProvider.autoDispose<AudioBridgeSenderNotifier, SenderState>(
-        (ref) => AudioBridgeSenderNotifier());
+        (ref) => AudioBridgeSenderNotifier(
+            SignalingService(ApiConfig.signalingWsUrl)));
 
+/// Joins the receiver's signaling room, negotiates a WebRTC data channel,
+/// decodes a picked audio file with the same decoders audio_upload_
+/// provider.dart uses, and streams it out in real-time-paced 1-second
+/// PCM16 chunks — one chunk per second, matching how a live call would
+/// actually deliver audio (unlike the upload path, which intentionally
+/// streams as fast as possible).
+///
+/// This used to be a WebSocketChannel client connecting directly to the
+/// receiver's IP:port (dart:io-only, and required both devices on the same
+/// LAN with the receiver's port reachable). It now negotiates a WebRTC
+/// peer connection via SignalingService, so the same code path runs on
+/// Chrome as well as phones.
 class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
-  AudioBridgeSenderNotifier() : super(const SenderState());
+  AudioBridgeSenderNotifier(this._signaling) : super(const SenderState());
 
-  WebSocketChannel? _channel;
+  final SignalingService _signaling;
+  RTCPeerConnection? _pc;
+  RTCDataChannel? _dataChannel;
+  StreamSubscription? _signalingSub;
   Timer? _pacer;
   bool _disposed = false;
 
-  Future<void> connect(String receiverIp, {int port = kBridgePort}) async {
+  /// Joins signaling room [room] (the code shown on the receiver's
+  /// screen), creates a WebRTC offer, and waits for the data channel to
+  /// open.
+  Future<void> connect(String room) async {
     state = state.copyWith(stage: SenderStage.connecting, errorMessage: null);
     try {
-      _channel = WebSocketChannel.connect(Uri.parse('ws://$receiverIp:$port'));
-      await _channel!.ready; // throws if the receiver isn't reachable
-      if (_disposed) return;
-      state = state.copyWith(stage: SenderStage.connected);
+      _pc = await createPeerConnection(kIceServers);
+      _pc!.onIceCandidate = (candidate) {
+        if (candidate.candidate == null) return;
+        _signaling.send({'type': 'ice', 'candidate': candidate.toMap()});
+      };
+
+      _dataChannel = await _pc!.createDataChannel(
+        'audio',
+        RTCDataChannelInit()..ordered = true,
+      );
+      _dataChannel!.onDataChannelState = (rtcState) {
+        if (_disposed) return;
+        if (rtcState == RTCDataChannelState.RTCDataChannelOpen) {
+          state = state.copyWith(stage: SenderStage.connected);
+        } else if (rtcState == RTCDataChannelState.RTCDataChannelClosed &&
+            state.stage != SenderStage.finished) {
+          state = state.copyWith(
+              stage: SenderStage.error, errorMessage: 'Connection closed.');
+        }
+      };
+
+      await _signaling.connectAndJoin(room);
+      _signalingSub?.cancel();
+      _signalingSub = _signaling.messages.listen(_handleSignal);
+
+      final offer = await _pc!.createOffer();
+      await _pc!.setLocalDescription(offer);
+      _signaling
+          .send({'type': 'offer', 'sdp': offer.sdp, 'sdpType': offer.type});
     } catch (e) {
       if (_disposed) return;
       state = state.copyWith(
         stage: SenderStage.error,
-        errorMessage: "Couldn't reach $receiverIp:$port — $e",
+        errorMessage: "Couldn't connect using code $room — $e",
       );
     }
   }
 
+  Future<void> _handleSignal(Map<String, dynamic> msg) async {
+    if (_disposed || _pc == null) return;
+    switch (msg['type']) {
+      case 'answer':
+        await _pc!.setRemoteDescription(
+          RTCSessionDescription(msg['sdp'] as String, msg['sdpType'] as String),
+        );
+        break;
+      case 'ice':
+        final c = msg['candidate'] as Map<String, dynamic>;
+        await _pc!.addCandidate(RTCIceCandidate(
+          c['candidate'] as String?,
+          c['sdpMid'] as String?,
+          c['sdpMLineIndex'] as int?,
+        ));
+        break;
+      case 'room-full':
+        if (_disposed) return;
+        state = state.copyWith(
+          stage: SenderStage.error,
+          errorMessage: 'That room code is already in use — check it with '
+              'the receiver.',
+        );
+        break;
+    }
+  }
+
+  /// Opens the file picker, decodes the chosen file (wav or mp3), and
+  /// starts streaming it at real-time pace: exactly [kSamplesPerChunk]
+  /// samples (1 second of 16kHz mono audio) per chunk, one chunk per
+  /// second, so the receiver sees "live call" pacing rather than a burst.
   Future<void> pickAndSendFile() async {
-    if (_channel == null) return;
+    if (_dataChannel == null) return;
 
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -124,31 +201,32 @@ class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
     state =
         state.copyWith(totalSeconds: totalSeconds, stage: SenderStage.sending);
 
-    _channel!.sink.add(jsonEncode({
+    // Tell the receiver what's coming so it can show progress/duration.
+    _dataChannel!.send(RTCDataChannelMessage(jsonEncode({
       'type': 'meta',
       'sampleRate': kChunkSampleRate,
       'totalSamples': decoded.samples.length,
       'fileName': picked.name,
-    }));
+    })));
 
     int offset = 0;
     int chunkIndex = 0;
     _pacer?.cancel();
     _pacer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_disposed || _channel == null) {
+      if (_disposed || _dataChannel == null) {
         timer.cancel();
         return;
       }
       if (offset >= decoded.samples.length) {
         timer.cancel();
-        _channel!.sink.add(jsonEncode({'type': 'end'}));
+        _dataChannel!.send(RTCDataChannelMessage(jsonEncode({'type': 'end'})));
         state = state.copyWith(stage: SenderStage.finished);
         return;
       }
 
       final end = (offset + kSamplesPerChunk).clamp(0, decoded.samples.length);
       final chunk = decoded.samples.sublist(offset, end);
-      _channel!.sink.add(_toPcm16Bytes(chunk));
+      _dataChannel!.send(RTCDataChannelMessage.fromBinary(_toPcm16Bytes(chunk)));
       offset = end;
       chunkIndex++;
       state = state.copyWith(sentSeconds: chunkIndex);
@@ -165,8 +243,12 @@ class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
 
   void disconnect() {
     _pacer?.cancel();
-    _channel?.sink.close();
-    _channel = null;
+    _dataChannel?.close();
+    _dataChannel = null;
+    _pc?.close();
+    _pc = null;
+    _signalingSub?.cancel();
+    _signaling.disconnect();
     if (!_disposed) state = const SenderState();
   }
 
@@ -174,7 +256,10 @@ class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
   void dispose() {
     _disposed = true;
     _pacer?.cancel();
-    _channel?.sink.close();
+    _dataChannel?.close();
+    _pc?.close();
+    _signalingSub?.cancel();
+    _signaling.dispose();
     super.dispose();
   }
 }
@@ -246,6 +331,12 @@ final audioBridgeReceiverProvider = StateNotifierProvider.autoDispose<
   return AudioBridgeReceiverNotifier(backendSocket);
 });
 
+/// Hosts a plain WebSocket server on this phone. Once the sender phone
+/// connects and streams chunks, each chunk is decoded back to normalized
+/// samples and forwarded straight into your existing backend analysis
+/// socket — same call path your mic-based VAD capture and the upload
+/// screen already use, so the risk gauge / verdict logic on screen
+/// doesn't need to change at all.
 class AudioBridgeReceiverNotifier extends StateNotifier<ReceiverState> {
   final VoiceAnalysisSocket _backendSocket;
   HttpServer? _server;
@@ -323,6 +414,8 @@ class AudioBridgeReceiverNotifier extends StateNotifier<ReceiverState> {
           final bytes = Uint8List.fromList(data);
           final samples = _fromPcm16Bytes(bytes);
 
+          // Same amplitude calc your mic path uses, so the "audio
+          // playing" indicator behaves identically on screen.
           double sumSquares = 0.0;
           for (final s in samples) {
             sumSquares += s * s;
@@ -337,6 +430,7 @@ class AudioBridgeReceiverNotifier extends StateNotifier<ReceiverState> {
             receivedSeconds: chunkIndex,
           );
 
+          // Forward straight into the existing backend pipeline.
           _backendSocket.sendAudioChunk(samples);
         }
       },

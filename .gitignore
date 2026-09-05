@@ -44,4 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+#backend files
 backend
+
+#peer connection files
+signaling_server
+start_system.bat
+update_config.py

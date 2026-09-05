@@ -1,15 +1,28 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../../core/network/api_config.dart';
+import '../../../core/network/signaling_service.dart';
 import '../../../core/network/voice_analysis_socket.dart';
+import '../../../core/network/webrtc_config.dart';
 import '../../../models/analysis_result.dart';
-import 'audio_bridge_provider.dart' show kBridgePort;
 
+// NOTE: This used to host a dart:io HttpServer and wait for the sender
+// phone to open a WebSocket to it directly (see git history). That only
+// works when both devices are dart:io-capable phones on the same LAN with
+// broadcast/unicast unblocked — it cannot run in a browser at all, since
+// browsers have no API to bind a listening socket.
+//
+// It's been swapped for WebRTC: this side creates an RTCPeerConnection,
+// joins a signaling "room" by code, and waits for the sender's offer.
+// Once the peer connection's data channel opens, audio arrives as PCM16
+// binary messages exactly like before, and everything downstream (decode,
+// amplitude calc, forwarding into the backend analysis socket) is
+// unchanged.
 
 enum CallInterceptStage {
   waitingForCall,
@@ -19,8 +32,7 @@ enum CallInterceptStage {
 
 class CallInterceptState {
   final CallInterceptStage stage;
-  final String? localIp;
-  final int port;
+  final String? roomCode;
   final bool isSpeaking;
   final double amplitude;
   final AnalysisResult analysis;
@@ -29,8 +41,7 @@ class CallInterceptState {
 
   const CallInterceptState({
     this.stage = CallInterceptStage.waitingForCall,
-    this.localIp,
-    this.port = kBridgePort,
+    this.roomCode,
     this.isSpeaking = false,
     this.amplitude = 0.0,
     this.analysis = const AnalysisResult(),
@@ -40,8 +51,7 @@ class CallInterceptState {
 
   CallInterceptState copyWith({
     CallInterceptStage? stage,
-    String? localIp,
-    int? port,
+    String? roomCode,
     bool? isSpeaking,
     double? amplitude,
     AnalysisResult? analysis,
@@ -50,8 +60,7 @@ class CallInterceptState {
   }) {
     return CallInterceptState(
       stage: stage ?? this.stage,
-      localIp: localIp ?? this.localIp,
-      port: port ?? this.port,
+      roomCode: roomCode ?? this.roomCode,
       isSpeaking: isSpeaking ?? this.isSpeaking,
       amplitude: amplitude ?? this.amplitude,
       analysis: analysis ?? this.analysis,
@@ -64,18 +73,28 @@ class CallInterceptState {
 final callInterceptProvider = StateNotifierProvider.autoDispose<
     CallInterceptNotifier, CallInterceptState>((ref) {
   final socket = VoiceAnalysisSocket(ApiConfig.voiceAnalysisWsUrl);
-  return CallInterceptNotifier(socket);
+  final signaling = SignalingService(ApiConfig.signalingWsUrl);
+  return CallInterceptNotifier(socket, signaling);
 });
 
+/// Joins a signaling room and waits for the paired phone/browser to send a
+/// WebRTC offer. Once the resulting data channel opens, audio chunks are
+/// forwarded into the same backend analysis socket the old HttpServer
+/// version used — the state machine (waitingForCall / callActive /
+/// callEnded), the call timer, and the escalate/save flow in
+/// live_call_screen.dart are all unchanged.
 class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
   final VoiceAnalysisSocket _socket;
-  HttpServer? _server;
-  WebSocket? _callSocket;
+  final SignalingService _signaling;
+  RTCPeerConnection? _pc;
+  RTCDataChannel? _dataChannel;
+  StreamSubscription? _signalingSub;
   Timer? _timer;
   final List<StreamSubscription> _subscriptions = [];
   bool _disposed = false;
 
-  CallInterceptNotifier(this._socket) : super(const CallInterceptState()) {
+  CallInterceptNotifier(this._socket, this._signaling)
+      : super(const CallInterceptState()) {
     _socket.connect();
     _subscriptions.add(_socket.resultStream.listen((result) {
       if (_disposed) return;
@@ -83,88 +102,100 @@ class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
     }));
   }
 
-  Future<void> startListening({int port = kBridgePort}) async {
-    if (_server != null || _disposed) return;
+  /// Starts waiting for the paired device in signaling room [room]. Call
+  /// this as soon as the receiver role is chosen (mirrors the old
+  /// auto-start-listening behavior) so the room code is ready to display.
+  Future<void> startListening(String room) async {
+    if (_pc != null || _disposed) return;
     try {
-      final ip = await _findLocalIp();
-      if (_disposed) return;
-      if (ip == null) {
-        state = state.copyWith(
-          errorMessage: "Couldn't determine this phone's local IP — "
-              'make sure Wi-Fi is connected.',
-        );
-        return;
-      }
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
-      if (_disposed) return;
       state = state.copyWith(
         stage: CallInterceptStage.waitingForCall,
-        localIp: ip,
-        port: port,
+        roomCode: room,
         errorMessage: null,
       );
 
-      _server!.listen((HttpRequest request) async {
-        if (WebSocketTransformer.isUpgradeRequest(request)) {
-          final socket = await WebSocketTransformer.upgrade(request);
-          _handleCallSocket(socket);
-        } else {
-          request.response
-            ..statusCode = HttpStatus.forbidden
-            ..close();
-        }
-      });
+      _pc = await createPeerConnection(kIceServers);
+      _pc!.onIceCandidate = (candidate) {
+        if (candidate.candidate == null) return;
+        _signaling.send({'type': 'ice', 'candidate': candidate.toMap()});
+      };
+      _pc!.onDataChannel = (channel) => _bindDataChannel(channel);
+
+      await _signaling.connectAndJoin(room);
+      _signalingSub?.cancel();
+      _signalingSub = _signaling.messages.listen(_handleSignal);
     } catch (e) {
       if (_disposed) return;
       state = state.copyWith(errorMessage: '$e');
     }
   }
 
-  void _handleCallSocket(WebSocket socket) {
-    _callSocket = socket;
-
-    socket.listen(
-      (data) {
+  Future<void> _handleSignal(Map<String, dynamic> msg) async {
+    if (_disposed || _pc == null) return;
+    switch (msg['type']) {
+      case 'offer':
+        await _pc!.setRemoteDescription(
+          RTCSessionDescription(msg['sdp'] as String, msg['sdpType'] as String),
+        );
+        final answer = await _pc!.createAnswer();
+        await _pc!.setLocalDescription(answer);
+        _signaling.send(
+            {'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
+        break;
+      case 'ice':
+        final c = msg['candidate'] as Map<String, dynamic>;
+        await _pc!.addCandidate(RTCIceCandidate(
+          c['candidate'] as String?,
+          c['sdpMid'] as String?,
+          c['sdpMLineIndex'] as int?,
+        ));
+        break;
+      case 'room-full':
         if (_disposed) return;
-        if (data is String) {
-          final msg = jsonDecode(data);
-          switch (msg['type']) {
-            case 'meta':
-              _beginCall();
-              break;
-            case 'end':
-              _finishCall();
-              break;
-          }
-        } else if (data is List<int>) {
-          final bytes = Uint8List.fromList(data);
-          final samples = _fromPcm16Bytes(bytes);
-          double sumSquares = 0.0;
-          for (final s in samples) {
-            sumSquares += s * s;
-          }
-          final rms =
-              samples.isEmpty ? 0.0 : (sumSquares / samples.length).abs();
-          final normalized = (rms * 12.0).clamp(0.0, 1.0);
-          final speaking = normalized > 0.15;
+        state = state.copyWith(
+            errorMessage: 'That room code is already in use — try a new one.');
+        break;
+    }
+  }
 
-          state = state.copyWith(
-            amplitude: speaking ? normalized : 0.05,
-            isSpeaking: speaking,
-          );
+  void _bindDataChannel(RTCDataChannel channel) {
+    _dataChannel = channel;
+    channel.onMessage = (RTCDataChannelMessage message) {
+      if (_disposed) return;
 
-          _socket.sendAudioChunk(samples);
+      if (!message.isBinary) {
+        final msg = jsonDecode(message.text);
+        switch (msg['type']) {
+          case 'meta':
+            _beginCall();
+            break;
+          case 'end':
+            _finishCall();
+            break;
         }
-      },
-      onDone: () {
-        if (_disposed) return;
-        if (state.stage == CallInterceptStage.callActive) _finishCall();
-      },
-      onError: (e) {
-        if (_disposed) return;
-        state = state.copyWith(errorMessage: '$e');
-      },
-    );
+        return;
+      }
+
+      final samples = _fromPcm16Bytes(message.binary);
+
+      // Same amplitude calc the old VAD/bridge path used, so the "speech
+      // detected" indicator behaves identically.
+      double sumSquares = 0.0;
+      for (final s in samples) {
+        sumSquares += s * s;
+      }
+      final rms = samples.isEmpty ? 0.0 : (sumSquares / samples.length).abs();
+      final normalized = (rms * 12.0).clamp(0.0, 1.0);
+      final speaking = normalized > 0.15;
+
+      state = state.copyWith(
+        amplitude: speaking ? normalized : 0.05,
+        isSpeaking: speaking,
+      );
+
+      // Forward straight into the existing backend pipeline.
+      _socket.sendAudioChunk(samples);
+    };
   }
 
   void _beginCall() {
@@ -190,9 +221,11 @@ class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
     }
   }
 
+  /// Manual "End" button in the UI — ends the call locally even if the
+  /// paired phone hasn't sent an 'end' message yet.
   Future<void> endSimulatedCall() async {
-    await _callSocket?.close();
-    _callSocket = null;
+    await _dataChannel?.close();
+    _dataChannel = null;
     _finishCall();
   }
 
@@ -206,22 +239,14 @@ class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
     return samples;
   }
 
-  Future<String?> _findLocalIp() async {
-    for (final interface in await NetworkInterface.list(
-        type: InternetAddressType.IPv4, includeLoopback: false)) {
-      for (final addr in interface.addresses) {
-        if (!addr.isLoopback) return addr.address;
-      }
-    }
-    return null;
-  }
-
+  /// Reset back to the waiting screen, ready for the next call. Keeps the
+  /// same room code so the sender doesn't need a new one.
   void reset() {
     _timer?.cancel();
-    _callSocket?.close();
-    _callSocket = null;
+    _dataChannel?.close();
+    _dataChannel = null;
     if (!_disposed) {
-      state = CallInterceptState(localIp: state.localIp, port: state.port);
+      state = CallInterceptState(roomCode: state.roomCode);
     }
   }
 
@@ -232,8 +257,10 @@ class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
     for (final sub in _subscriptions) {
       sub.cancel();
     }
-    _callSocket?.close();
-    _server?.close(force: true);
+    _signalingSub?.cancel();
+    _dataChannel?.close();
+    _pc?.close();
+    _signaling.dispose();
     _socket.dispose();
     super.dispose();
   }
