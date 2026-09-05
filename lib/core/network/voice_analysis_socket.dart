@@ -23,26 +23,17 @@ class VoiceAnalysisSocket {
     }
     try {
       _channel = WebSocketChannel.connect(Uri.parse(url));
-      debugPrint("[socket] connecting to $url");
       _channel!.stream.listen(
         (message) {
-          // TEMP DEBUG: confirms raw frames are actually reaching this
-          // listener at all, and what type/shape they are.
-          debugPrint("[socket] raw message (${message.runtimeType}): "
-              "${message is String ? message : '<binary ${(message as List).length} bytes>'}");
           try {
             final data = jsonDecode(message as String);
             final result = AnalysisResult.fromJson(data);
-            debugPrint("[socket] parsed result: score=${result.smoothedScore} "
-                "verdict=${result.verdict} confidence=${result.confidence}");
             _resultController.add(result);
-          } catch (e, st) {
+          } catch (e) {
             debugPrint("[socket] FAILED to parse message: $e");
-            debugPrint("$st");
           }
         },
         onDone: () {
-          debugPrint("[socket] onDone fired — connection closed");
           _handleDisconnect();
         },
         onError: (error) => debugPrint("[socket] WebSocket Error: $error"),
@@ -68,7 +59,6 @@ class VoiceAnalysisSocket {
 
   void _handleDisconnect() {
     if (_isDisposed) return;
-    debugPrint("[socket] disconnected. Reconnecting in 2s...");
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 2), connect);
   }

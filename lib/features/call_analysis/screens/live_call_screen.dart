@@ -159,6 +159,31 @@ class _LiveCallInterceptScreenState
   // -------------------------------------------------------------------
   // Receiver flow — unchanged analysis UI, driven by callInterceptProvider
   // -------------------------------------------------------------------
+  Widget _buildInfoChip(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.bgSurfaceElevated,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Text("$label: ",
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 12)),
+          Text(value,
+              style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
 
   Widget _buildReceiverFlow() {
     final state = ref.watch(callInterceptProvider);
@@ -230,6 +255,18 @@ class _LiveCallInterceptScreenState
               label: state.analysis.verdict,
             ),
             const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: [
+                _buildInfoChip(
+                    "Verdict", state.analysis.verdict, Icons.gavel_rounded),
+                _buildInfoChip("Confidence", state.analysis.confidence,
+                    Icons.analytics_outlined),
+              ],
+            ),
+            const SizedBox(height: 16),
             Text(
               state.isSpeaking ? 'Speech detected' : 'Listening…',
               style: TextStyle(
@@ -274,6 +311,18 @@ class _LiveCallInterceptScreenState
             RiskGauge(
               score: state.analysis.smoothedScore,
               label: state.analysis.verdict,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: [
+                _buildInfoChip(
+                    "Verdict", state.analysis.verdict, Icons.gavel_rounded),
+                _buildInfoChip("Confidence", state.analysis.confidence,
+                    Icons.analytics_outlined),
+              ],
             ),
             const SizedBox(height: 16),
             const Text('Log saved automatically.',

@@ -17,8 +17,6 @@ class AuthState {
   }
 }
 
-/// Auth controller. Login is still mocked,
-/// fingerprint / Face ID prompt via `local_auth`.
 class AuthController extends StateNotifier<AuthState> {
   final LocalAuthentication _localAuth = LocalAuthentication();
 
