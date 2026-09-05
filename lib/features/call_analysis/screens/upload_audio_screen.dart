@@ -21,7 +21,6 @@ class UploadAudioScreen extends ConsumerStatefulWidget {
 
 class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
   Future<void> _pickAndAnalyze() async {
-    // Calling pickFiles directly on FilePicker and allowing wav + mp3
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['wav', 'mp3'],
@@ -37,10 +36,8 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
     await ref.read(audioUploadProvider.notifier).analyzeFile(file.name, bytes);
   }
 
-  // Saves the finished analysis to the log. Called automatically the
-  // instant analysis reaches `done` — no button press needed anymore.
   Future<void> _saveAnalysis(AudioUploadState state) async {
-    final score = state.analysis.smoothedScore;
+    final score = state.analysis.riskScore;
     final verdict =
         score >= 0.7 ? RecordingVerdict.flagged : RecordingVerdict.safe;
     final now = DateTime.now();
@@ -59,6 +56,63 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
 
   void _exit() {
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Widget _buildAnimatedGaugeAndProgress(AudioUploadState state,
+      {required bool showProgressBar}) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: state.analysis.riskScore),
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+          builder: (context, animatedScore, _) {
+            return RiskGauge(
+              score: animatedScore,
+              label: state.analysis.verdict,
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8.0,
+          runSpacing: 8.0,
+          children: [
+            _buildInfoChip(
+                "Verdict", state.analysis.verdict, Icons.gavel_rounded),
+            _buildInfoChip("Confidence", state.analysis.confidence,
+                Icons.analytics_outlined),
+          ],
+        ),
+        if (showProgressBar) ...[
+          const SizedBox(height: 16),
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: state.progress),
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOut,
+            builder: (context, animatedProgress, _) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(
+                    value: animatedProgress,
+                    backgroundColor: AppColors.bgSurfaceElevated,
+                    color: AppColors.accentCyan,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                      '${(animatedProgress * 100).toStringAsFixed(0)}% analyzed',
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              );
+            },
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildInfoChip(String label, String value, IconData icon) {
@@ -141,33 +195,7 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
                 style: const TextStyle(
                     color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
-            RiskGauge(
-              score: state.analysis.smoothedScore,
-              label: state.analysis.verdict,
-            ),
-            const SizedBox(height: 16),
-// Replace your Row with this Wrap widget:
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8.0, // Replaces your SizedBox(width: 8)
-              runSpacing: 8.0, // Adds vertical space if it wraps
-              children: [
-                _buildInfoChip(
-                    "Verdict", state.analysis.verdict, Icons.gavel_rounded),
-                _buildInfoChip("Confidence", state.analysis.confidence,
-                    Icons.analytics_outlined),
-              ],
-            ),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              value: state.progress,
-              backgroundColor: AppColors.bgSurfaceElevated,
-              color: AppColors.accentCyan,
-            ),
-            const SizedBox(height: 8),
-            Text('${(state.progress * 100).toStringAsFixed(0)}% analyzed',
-                style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 12)),
+            _buildAnimatedGaugeAndProgress(state, showProgressBar: true),
           ],
         );
 
@@ -179,22 +207,7 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
                 style: const TextStyle(
                     color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 20),
-            RiskGauge(
-              score: state.analysis.smoothedScore,
-              label: state.analysis.verdict,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8.0,
-              runSpacing: 8.0,
-              children: [
-                _buildInfoChip(
-                    "Verdict", state.analysis.verdict, Icons.gavel_rounded),
-                _buildInfoChip("Confidence", state.analysis.confidence,
-                    Icons.analytics_outlined),
-              ],
-            ),
+            _buildAnimatedGaugeAndProgress(state, showProgressBar: false),
             const SizedBox(height: 8),
             const Text('Saved to your log',
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),

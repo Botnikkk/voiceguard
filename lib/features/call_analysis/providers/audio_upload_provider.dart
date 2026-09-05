@@ -54,37 +54,38 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
   StreamSubscription<AnalysisResult>? _resultSub;
   bool _disposed = false;
 
-  // Total sample count for the file currently being analyzed. Used to turn
-  // the server's cumulative "samples_processed" into a 0..1 fraction, so
-  // progress reflects audio that has actually been analyzed and returned —
-  // not audio that has merely been sent over the socket.
   int _totalSamples = 0;
 
-  // The backend only counts samples, never wall-clock time, so there's no
-  // benefit to pacing chunks to real playback speed — send as fast as the
-  // socket will take them. A tiny delay just keeps us from queuing the
-  // entire buffer synchronously in one microtask burst.
-  static const int _chunkSize = 512 * 16;
-  static const Duration _interChunkDelay = Duration(milliseconds: 5);
+  int _lastConfirmedSamples = 0;
+
+  static const int _chunkSize = 512 * 64;
+  static const Duration _interChunkDelay = Duration.zero;
+
+  static const int _serverWindowSamples = 64600;
+  static const int _serverStepSamples = 24000;
+  static const int _leadWindowMultiplier = 2;
+  static const int _maxLeadSamples =
+      (_serverWindowSamples + _serverStepSamples) * _leadWindowMultiplier;
+  static const Duration _backpressurePoll = Duration(milliseconds: 40);
+  static const Duration _maxBackpressureWaitPerChunk = Duration(seconds: 8);
 
   AudioUploadNotifier(this._socket) : super(const AudioUploadState()) {
     _socket.connect();
     _resultSub = _socket.resultStream.listen((result) {
       if (_disposed) return;
 
-      // Progress is driven ONLY by what the server confirms it has analyzed,
-      // never by how much we've sent. This is what keeps the % bar, the
-      // gauge, and the verdict all pointing at the same slice of audio.
       final analyzedFraction = _totalSamples > 0
           ? (result.samplesProcessed / _totalSamples).clamp(0.0, 1.0)
           : state.progress;
+
+      if (result.samplesProcessed > _lastConfirmedSamples) {
+        _lastConfirmedSamples = result.samplesProcessed;
+      }
 
       final wasActive = state.stage == UploadStage.streaming ||
           state.stage == UploadStage.decoding ||
           state.stage == UploadStage.awaitingVerdict;
 
-      // A result flagged final is the true end of analysis — flip to `done`
-      // right away instead of waiting on the blind timeout fallback below.
       final nextStage = result.isFinal
           ? UploadStage.done
           : (wasActive ? UploadStage.streaming : state.stage);
@@ -128,17 +129,23 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
       return;
     }
     _totalSamples = total;
+    _lastConfirmedSamples = 0;
 
     state = state.copyWith(stage: UploadStage.streaming, progress: 0.0);
 
-    // NOTE: this loop only paces how fast bytes go over the wire. It
-    // deliberately does NOT touch `state.progress` anymore — the % bar,
-    // gauge and verdict are all updated together from the result listener
-    // above, driven by what the server confirms it has actually analyzed.
     for (int i = 0; i < total; i += _chunkSize) {
       if (_disposed) return;
       final end = (i + _chunkSize).clamp(0, total);
       _socket.sendAudioChunk(samples.sublist(i, end));
+
+      final sentSoFar = end;
+      final backpressureStopwatch = Stopwatch()..start();
+      while (!_disposed &&
+          (sentSoFar - _lastConfirmedSamples) > _maxLeadSamples &&
+          backpressureStopwatch.elapsed < _maxBackpressureWaitPerChunk) {
+        await Future.delayed(_backpressurePoll);
+      }
+
       await Future.delayed(_interChunkDelay);
     }
 
@@ -148,10 +155,6 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
       state = state.copyWith(stage: UploadStage.awaitingVerdict);
     }
 
-    // Safety fallback only. Under normal conditions the result listener
-    // already flips us to `done` the instant a result with is_final=true
-    // arrives — this just guards against a dropped connection or a
-    // clip so short the server never emits a final result.
     const maxWait = Duration(seconds: 15);
     const pollInterval = Duration(milliseconds: 150);
     final waitStopwatch = Stopwatch()..start();
@@ -167,6 +170,7 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
   }
 
   void reset() {
+    _lastConfirmedSamples = 0;
     if (!_disposed) state = const AudioUploadState();
   }
 
