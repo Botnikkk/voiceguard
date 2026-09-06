@@ -73,9 +73,9 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
-        echoCancel: false,
-        noiseSuppress: false,
-        autoGain: false,
+        echoCancel: true,
+        noiseSuppress: true,
+        autoGain: true,
         androidConfig: AndroidRecordConfig(
           audioSource: AndroidAudioSource.mic,
           audioManagerMode: AudioManagerMode.modeNormal,
@@ -113,9 +113,6 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
       if (chunkData.samples.isNotEmpty) {
         _socket.sendAudioChunk(chunkData.samples);
       }
-      if (chunkData.isFinal) {
-        _socket.sendEndSignal();
-      }
     }));
 
     _subscriptions.add(_vadHandler!.onSpeechEnd.listen((_) {
@@ -131,6 +128,7 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
     if (_isListening && _vadHandler != null) {
       await _vadHandler!.stopListening();
       _isListening = false;
+      _socket.sendEndSignal();
     }
   }
 
