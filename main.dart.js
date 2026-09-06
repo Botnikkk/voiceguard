@@ -28215,12 +28215,8 @@ adX:function adX(){},
 adY:function adY(){},
 my:function my(a,b){this.a=a
 this.b=b},
-akA:function akA(a,b,c,d,e){var _=this
-_.b=a
-_.f=b
-_.r=c
-_.w=d
-_.x=e},
+akA:function akA(a,b){this.b=a
+this.x=b},
 hi:function hi(a,b){this.a=a
 this.b=b},
 a7m(a,b,c){var s,r,q=c.length
@@ -97391,7 +97387,7 @@ m=t.z
 l=A.y(n,m)
 l.m(0,"recorderId",a)
 o=b.x
-l.M(0,A.ad(["encoder","pcm16bits","bitRate",b.b,"sampleRate",16e3,"numChannels",1,"device",null,"autoGain",b.f,"echoCancel",b.r,"noiseSuppress",b.w,"androidConfig",A.ad(["useLegacy",!1,"service",null,"muteAudio",!1,"manageBluetooth",!0,"audioSource",o.e.b,"speakerphone",!0,"audioManagerMode",o.r.b],n,m),"iosConfig",B.Eh.tG(),"audioInterruption",1,"streamBufferSize",null],n,m))
+l.M(0,A.ad(["encoder","pcm16bits","bitRate",b.b,"sampleRate",16e3,"numChannels",1,"device",null,"autoGain",!0,"echoCancel",!0,"noiseSuppress",!0,"androidConfig",A.ad(["useLegacy",!1,"service",null,"muteAudio",!1,"manageBluetooth",!0,"audioSource",o.e.b,"speakerphone",!0,"audioManagerMode",o.r.b],n,m),"iosConfig",B.Eh.tG(),"audioInterruption",1,"streamBufferSize",null],n,m))
 s=3
 return A.q(p.pA$.fD("startStream",l,!1,m),$async$un)
 case 3:n=new A.BP("com.llfbandit.record/eventsRecord/"+a).a2O()
@@ -97650,9 +97646,9 @@ MK(a){return this.ayo(a)},
 ayo(a){var s=0,r=A.w(t.m),q,p,o
 var $async$MK=A.x(function(b,c){if(b===1)return A.t(c,r)
 for(;;)switch(s){case 0:o=A.y(t.N,t.K)
-o.m(0,"autoGainControl",a.f)
-o.m(0,"echoCancellation",a.r)
-o.m(0,"noiseSuppression",a.w)
+o.m(0,"autoGainControl",!0)
+o.m(0,"echoCancellation",!0)
+o.m(0,"noiseSuppression",!0)
 o.m(0,"sampleRate",16e3)
 o.m(0,"sampleSize",16)
 o.m(0,"channelCount",1)
@@ -100922,6 +100918,7 @@ break
 case 2:s=4
 return A.q(q.w.j_(),$async$j_)
 case 4:q.y=!1
+q.r.Ff()
 case 3:return A.u(null,r)}})
 return A.v($async$j_,r)},
 l(){var s,r,q,p=this
@@ -100951,8 +100948,7 @@ m.sbG(0,s.atE(o))},
 $S:625}
 A.as6.prototype={
 $1(a){var s=a.b
-if(J.ko(s))this.a.r.Fe(s)
-if(a.a)this.a.r.Ff()},
+if(J.ko(s))this.a.r.Fe(s)},
 $S:626}
 A.as7.prototype={
 $1(a){var s=this.a
@@ -107127,7 +107123,7 @@ B.RZ=new A.am(B.jj,B.ji)
 B.CY=new A.a5Z(1,"mic")
 B.D3=new A.a6m(0,"modeNormal")
 B.CZ=new A.a6_(B.CY,B.D3)
-B.S0=new A.akA(128e3,!1,!1,!1,B.CZ)
+B.S0=new A.akA(128e3,B.CZ)
 B.cf=new A.x7(0,"safe")
 B.et=new A.x7(1,"flagged")
 B.iS=new A.x7(2,"escalated")
