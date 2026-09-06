@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:voiceguard/core/widgets/web_constraint.dart';
 
+import '../../../core/widgets/server_down_dialog.dart';
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
@@ -12,16 +13,6 @@ import '../providers/call_intercept_provider.dart';
 import '../providers/audio_bridge_provider.dart';
 import '../providers/live_call_pairing_provider.dart';
 
-/// "Intercept live call". Opens by asking the user whether this phone is
-/// the Sender (streams test call audio out) or the Receiver (hosts the
-/// bridge and runs analysis), then auto-pairs with a nearby phone of the
-/// opposite role over LAN broadcast instead of typing an IP address.
-///
-/// Role selection + pairing lives in live_call_pairing_provider.dart.
-/// The actual audio transport is unchanged: Receiver still drives
-/// call_intercept_provider.dart (WebSocket server -> backend analysis),
-/// Sender still drives audio_bridge_provider.dart's sender (WebSocket
-/// client streaming a picked file at real-time pace).
 class LiveCallInterceptScreen extends ConsumerStatefulWidget {
   const LiveCallInterceptScreen({super.key});
 
@@ -187,6 +178,21 @@ class _LiveCallInterceptScreenState
 
   Widget _buildReceiverFlow() {
     final state = ref.watch(callInterceptProvider);
+    ref.listen<CallInterceptState>(callInterceptProvider, (previous, next) {
+      if (previous != null &&
+          next.serverDownEvent != previous.serverDownEvent) {
+        showServerDownDialog(
+          context,
+          onDismissed: () {
+            if (mounted) {
+              Navigator.of(context)
+                  .pop(); // exits the whole screen, not just role selection
+            }
+          },
+        );
+      }
+    });
+    // ...unchanged...
 
     Widget body;
     switch (state.stage) {
@@ -359,6 +365,19 @@ class _LiveCallInterceptScreenState
   Widget _buildSenderFlow(LiveCallPairingState pairing) {
     final state = ref.watch(audioBridgeSenderProvider);
     final notifier = ref.read(audioBridgeSenderProvider.notifier);
+    ref.listen<SenderState>(audioBridgeSenderProvider, (previous, next) {
+      if (previous != null &&
+          next.serverDownEvent != previous.serverDownEvent) {
+        showServerDownDialog(
+          context,
+          onDismissed: () {
+            notifier.disconnect();
+            if (mounted) Navigator.of(context).pop();
+          },
+        );
+      }
+    });
+    // ...unchanged...
 
     Widget body;
     if (state.stage == SenderStage.idle) {

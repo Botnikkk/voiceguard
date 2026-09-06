@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:voiceguard/core/widgets/web_constraint.dart';
 
+import '../../../core/widgets/server_down_dialog.dart';
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
@@ -150,6 +151,15 @@ class _UploadAudioScreenState extends ConsumerState<UploadAudioScreen> {
           next.stage == UploadStage.done && previous?.stage != UploadStage.done;
       if (justFinished) {
         _saveAnalysis(next);
+      }
+      if (previous != null &&
+          next.serverDownEvent != previous.serverDownEvent) {
+        showServerDownDialog(
+          context,
+          onDismissed: () {
+            if (mounted) Navigator.of(context).pop();
+          },
+        );
       }
     });
 

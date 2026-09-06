@@ -3,33 +3,35 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Thin WebSocket client to the signaling relay server (see
-/// signaling_server/server.js). Joins a room by code and exposes a stream
-/// of incoming messages — 'joined', 'peer-joined', 'offer', 'answer',
-/// 'ice', 'room-full' — so the WebRTC providers can drive the handshake
-/// without knowing anything about sockets themselves.
-///
-/// This replaces device_discovery_service.dart. Where that service found
-/// peers via UDP broadcast on the local subnet (which browsers can't do
-/// at all), this finds peers by both sides typing/sharing the same room
-/// code into a server both can reach — which works from any browser or
-/// device, on any network, as long as they can reach the signaling server.
 class SignalingService {
-  final String serverUrl; // e.g. ws://192.168.1.10:8090
+  final String serverUrl;
 
   WebSocketChannel? _channel;
   StreamSubscription? _sub;
+  bool _hasNotifiedUnavailable = false;
 
   final _messagesController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get messages => _messagesController.stream;
 
+  final _unavailableController = StreamController<void>.broadcast();
+  Stream<void> get onUnavailable => _unavailableController.stream;
+
   SignalingService(this.serverUrl);
 
   Future<void> connectAndJoin(String room) async {
     await disconnect();
-    _channel = WebSocketChannel.connect(Uri.parse(serverUrl));
-    await _channel!.ready;
+    try {
+      _channel = WebSocketChannel.connect(Uri.parse(serverUrl));
+      await _channel!.ready.timeout(const Duration(seconds: 5));
+    } catch (e) {
+      if (!_hasNotifiedUnavailable) {
+        _hasNotifiedUnavailable = true;
+        _unavailableController.add(null);
+      }
+      rethrow;
+    }
+    _hasNotifiedUnavailable = false;
 
     _sub = _channel!.stream.listen(
       (raw) {
@@ -37,7 +39,6 @@ class SignalingService {
           final msg = jsonDecode(raw as String) as Map<String, dynamic>;
           _messagesController.add(msg);
         } catch (_) {
-          // Ignore malformed frames.
         }
       },
       onError: (e) => _messagesController.addError(e),
@@ -61,5 +62,6 @@ class SignalingService {
   Future<void> dispose() async {
     await disconnect();
     await _messagesController.close();
+    await _unavailableController.close();
   }
 }

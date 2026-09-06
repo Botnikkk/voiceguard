@@ -11,19 +11,6 @@ import '../../../core/network/voice_analysis_socket.dart';
 import '../../../core/network/webrtc_config.dart';
 import '../../../models/analysis_result.dart';
 
-// NOTE: This used to host a dart:io HttpServer and wait for the sender
-// phone to open a WebSocket to it directly (see git history). That only
-// works when both devices are dart:io-capable phones on the same LAN with
-// broadcast/unicast unblocked — it cannot run in a browser at all, since
-// browsers have no API to bind a listening socket.
-//
-// It's been swapped for WebRTC: this side creates an RTCPeerConnection,
-// joins a signaling "room" by code, and waits for the sender's offer.
-// Once the peer connection's data channel opens, audio arrives as PCM16
-// binary messages exactly like before, and everything downstream (decode,
-// amplitude calc, forwarding into the backend analysis socket) is
-// unchanged.
-
 enum CallInterceptStage {
   waitingForCall,
   callActive,
@@ -38,6 +25,7 @@ class CallInterceptState {
   final AnalysisResult analysis;
   final int callSeconds;
   final String? errorMessage;
+  final int serverDownEvent;
 
   const CallInterceptState({
     this.stage = CallInterceptStage.waitingForCall,
@@ -47,6 +35,7 @@ class CallInterceptState {
     this.analysis = const AnalysisResult(),
     this.callSeconds = 0,
     this.errorMessage,
+    this.serverDownEvent = 0,
   });
 
   CallInterceptState copyWith({
@@ -57,6 +46,7 @@ class CallInterceptState {
     AnalysisResult? analysis,
     int? callSeconds,
     String? errorMessage,
+    int? serverDownEvent,
   }) {
     return CallInterceptState(
       stage: stage ?? this.stage,
@@ -66,6 +56,7 @@ class CallInterceptState {
       analysis: analysis ?? this.analysis,
       callSeconds: callSeconds ?? this.callSeconds,
       errorMessage: errorMessage,
+      serverDownEvent: serverDownEvent ?? this.serverDownEvent,
     );
   }
 }
@@ -77,12 +68,6 @@ final callInterceptProvider = StateNotifierProvider.autoDispose<
   return CallInterceptNotifier(socket, signaling);
 });
 
-/// Joins a signaling room and waits for the paired phone/browser to send a
-/// WebRTC offer. Once the resulting data channel opens, audio chunks are
-/// forwarded into the same backend analysis socket the old HttpServer
-/// version used — the state machine (waitingForCall / callActive /
-/// callEnded), the call timer, and the escalate/save flow in
-/// live_call_screen.dart are all unchanged.
 class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
   final VoiceAnalysisSocket _socket;
   final SignalingService _signaling;
@@ -100,11 +85,16 @@ class CallInterceptNotifier extends StateNotifier<CallInterceptState> {
       if (_disposed) return;
       state = state.copyWith(analysis: result);
     }));
+    _subscriptions.add(_socket.onUnavailable.listen((_) {
+      if (_disposed) return;
+      state = state.copyWith(serverDownEvent: state.serverDownEvent + 1);
+    }));
+    _subscriptions.add(_signaling.onUnavailable.listen((_) {
+      if (_disposed) return;
+      state = state.copyWith(serverDownEvent: state.serverDownEvent + 1);
+    }));
   }
 
-  /// Starts waiting for the paired device in signaling room [room]. Call
-  /// this as soon as the receiver role is chosen (mirrors the old
-  /// auto-start-listening behavior) so the room code is ready to display.
   Future<void> startListening(String room) async {
     if (_pc != null || _disposed) return;
     try {

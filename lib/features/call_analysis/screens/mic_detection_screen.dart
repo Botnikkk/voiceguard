@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:voiceguard/core/widgets/web_constraint.dart';
 
+import '../../../core/widgets/server_down_dialog.dart';
 import '../../../models/recording_log.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_button.dart';
@@ -12,10 +13,6 @@ import '../../../../core/widgets/risk_gauge.dart';
 import '../providers/risk_score_provider.dart';
 import '../providers/voice_analysis_provider.dart';
 
-/// "Detect audio from mic" — ambient listening via the device mic with
-/// no awareness of call state. Least accurate of the three modes since
-/// it's picking up whatever the mic hears, not a clean or call-targeted
-/// signal.
 class MicDetectionScreen extends ConsumerStatefulWidget {
   const MicDetectionScreen({super.key});
 
@@ -146,8 +143,50 @@ class _MicDetectionScreenState extends ConsumerState<MicDetectionScreen> {
     );
   }
 
+  Widget _buildMicWarningBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.accentCyan.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accentCyan.withValues(alpha: 0.3)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded,
+              color: AppColors.accentCyan, size: 18),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "For best accuracy, disconnect any External/Bluetooth microphone devices before starting.",
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<VoiceAnalysisState>(voiceAnalysisProvider, (previous, next) {
+      if (previous != null &&
+          next.serverDownEvent != previous.serverDownEvent) {
+        showServerDownDialog(
+          context,
+          onDismissed: () {
+            ref.read(voiceAnalysisProvider.notifier).stopListening();
+            if (mounted) Navigator.of(context).pop();
+          },
+        );
+      }
+    });
     final riskScore = ref.watch(riskScoreProvider);
     final voiceState = ref.watch(voiceAnalysisProvider);
     final isDanger = riskScore >= 0.7;
@@ -176,7 +215,9 @@ class _MicDetectionScreenState extends ConsumerState<MicDetectionScreen> {
                 children: [
                   const SizedBox(height: 8),
                   _buildCallerHeader(voiceState.isSpeaking),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 16),
+                  _buildMicWarningBanner(),
+                  const SizedBox(height: 12),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),

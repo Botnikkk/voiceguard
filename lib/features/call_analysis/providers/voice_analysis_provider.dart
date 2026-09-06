@@ -12,21 +12,27 @@ class VoiceAnalysisState {
   final bool isSpeaking;
   final double amplitude;
   final AnalysisResult analysis;
+  final int serverDownEvent;
 
   const VoiceAnalysisState({
     this.isSpeaking = false,
     this.amplitude = 0.0,
     this.analysis = const AnalysisResult(),
+    this.serverDownEvent = 0,
   });
 
-  VoiceAnalysisState copyWith(
-      {bool? isSpeaking, double? amplitude, AnalysisResult? analysis}) {
-    return VoiceAnalysisState(
-      isSpeaking: isSpeaking ?? this.isSpeaking,
-      amplitude: amplitude ?? this.amplitude,
-      analysis: analysis ?? this.analysis,
-    );
-  }
+  VoiceAnalysisState copyWith({
+    bool? isSpeaking,
+    double? amplitude,
+    AnalysisResult? analysis,
+    int? serverDownEvent,
+  }) =>
+      VoiceAnalysisState(
+        isSpeaking: isSpeaking ?? this.isSpeaking,
+        amplitude: amplitude ?? this.amplitude,
+        analysis: analysis ?? this.analysis,
+        serverDownEvent: serverDownEvent ?? this.serverDownEvent,
+      );
 }
 
 final voiceAnalysisProvider = StateNotifierProvider.autoDispose<
@@ -43,6 +49,9 @@ class VoiceAnalysisNotifier extends StateNotifier<VoiceAnalysisState> {
 
   VoiceAnalysisNotifier(this._socket) : super(const VoiceAnalysisState()) {
     _socket.connect();
+    _subscriptions.add(_socket.onUnavailable.listen((_) {
+      state = state.copyWith(serverDownEvent: state.serverDownEvent + 1);
+    }));
     _subscriptions.add(_socket.resultStream.listen((result) {
       state = state.copyWith(analysis: result);
     }));

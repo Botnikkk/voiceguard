@@ -1,3 +1,4 @@
+// lib/core/network/voice_analysis_socket.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -10,20 +11,31 @@ class VoiceAnalysisSocket {
   WebSocketChannel? _channel;
   final String url;
   bool _isDisposed = false;
+  bool _hasNotifiedUnavailable = false;
   Timer? _reconnectTimer;
 
   final _resultController = StreamController<AnalysisResult>.broadcast();
   Stream<AnalysisResult> get resultStream => _resultController.stream;
 
+  final _unavailableController = StreamController<void>.broadcast();
+  Stream<void> get onUnavailable => _unavailableController.stream;
+
   VoiceAnalysisSocket(this.url);
 
-  void connect() {
-    if (_isDisposed) {
-      return;
-    }
+  Future<void> connect() async {
+    if (_isDisposed) return;
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(url));
-      _channel!.stream.listen(
+      final channel = WebSocketChannel.connect(Uri.parse(url));
+      await channel.ready.timeout(const Duration(seconds: 5));
+      if (_isDisposed) {
+        channel.sink.close();
+        return;
+      }
+      _channel = channel;
+      _hasNotifiedUnavailable =
+          false; // back up — a future drop can notify again
+
+      channel.stream.listen(
         (message) {
           try {
             final data = jsonDecode(message as String);
@@ -33,13 +45,15 @@ class VoiceAnalysisSocket {
             debugPrint("[socket] FAILED to parse message: $e");
           }
         },
-        onDone: () {
+        onDone: _handleDisconnect,
+        onError: (error) {
+          debugPrint("[socket] WebSocket Error: $error");
           _handleDisconnect();
         },
-        onError: (error) => debugPrint("[socket] WebSocket Error: $error"),
       );
     } catch (e) {
       debugPrint("[socket] WebSocket Connection Error: $e");
+      _handleDisconnect();
     }
   }
 
@@ -59,6 +73,11 @@ class VoiceAnalysisSocket {
 
   void _handleDisconnect() {
     if (_isDisposed) return;
+    _channel = null;
+    if (!_hasNotifiedUnavailable) {
+      _hasNotifiedUnavailable = true;
+      _unavailableController.add(null);
+    }
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 2), connect);
   }
@@ -68,5 +87,6 @@ class VoiceAnalysisSocket {
     _reconnectTimer?.cancel();
     _channel?.sink.close();
     _resultController.close();
+    _unavailableController.close();
   }
 }

@@ -31,6 +31,7 @@ class SenderState {
   final int totalSeconds;
   final int sentSeconds;
   final String? errorMessage;
+  final int serverDownEvent;
 
   const SenderState({
     this.stage = SenderStage.idle,
@@ -38,6 +39,7 @@ class SenderState {
     this.totalSeconds = 0,
     this.sentSeconds = 0,
     this.errorMessage,
+    this.serverDownEvent = 0,
   });
 
   SenderState copyWith({
@@ -46,6 +48,7 @@ class SenderState {
     int? totalSeconds,
     int? sentSeconds,
     String? errorMessage,
+    int? serverDownEvent,
   }) {
     return SenderState(
       stage: stage ?? this.stage,
@@ -53,29 +56,22 @@ class SenderState {
       totalSeconds: totalSeconds ?? this.totalSeconds,
       sentSeconds: sentSeconds ?? this.sentSeconds,
       errorMessage: errorMessage,
+      serverDownEvent: serverDownEvent ?? this.serverDownEvent,
     );
   }
 }
 
-final audioBridgeSenderProvider =
-    StateNotifierProvider.autoDispose<AudioBridgeSenderNotifier, SenderState>(
-        (ref) => AudioBridgeSenderNotifier(
-            SignalingService(ApiConfig.signalingWsUrl)));
+final audioBridgeSenderProvider = StateNotifierProvider
+    .autoDispose<AudioBridgeSenderNotifier, SenderState>((ref) =>
+        AudioBridgeSenderNotifier(SignalingService(ApiConfig.signalingWsUrl)));
 
-/// Joins the receiver's signaling room, negotiates a WebRTC data channel,
-/// decodes a picked audio file with the same decoders audio_upload_
-/// provider.dart uses, and streams it out in real-time-paced 1-second
-/// PCM16 chunks — one chunk per second, matching how a live call would
-/// actually deliver audio (unlike the upload path, which intentionally
-/// streams as fast as possible).
-///
-/// This used to be a WebSocketChannel client connecting directly to the
-/// receiver's IP:port (dart:io-only, and required both devices on the same
-/// LAN with the receiver's port reachable). It now negotiates a WebRTC
-/// peer connection via SignalingService, so the same code path runs on
-/// Chrome as well as phones.
 class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
-  AudioBridgeSenderNotifier(this._signaling) : super(const SenderState());
+  AudioBridgeSenderNotifier(this._signaling) : super(const SenderState()) {
+    _signaling.onUnavailable.listen((_) {
+      if (_disposed) return;
+      state = state.copyWith(serverDownEvent: state.serverDownEvent + 1);
+    });
+  }
 
   final SignalingService _signaling;
   RTCPeerConnection? _pc;
@@ -84,9 +80,6 @@ class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
   Timer? _pacer;
   bool _disposed = false;
 
-  /// Joins signaling room [room] (the code shown on the receiver's
-  /// screen), creates a WebRTC offer, and waits for the data channel to
-  /// open.
   Future<void> connect(String room) async {
     state = state.copyWith(stage: SenderStage.connecting, errorMessage: null);
     try {
@@ -226,7 +219,8 @@ class AudioBridgeSenderNotifier extends StateNotifier<SenderState> {
 
       final end = (offset + kSamplesPerChunk).clamp(0, decoded.samples.length);
       final chunk = decoded.samples.sublist(offset, end);
-      _dataChannel!.send(RTCDataChannelMessage.fromBinary(_toPcm16Bytes(chunk)));
+      _dataChannel!
+          .send(RTCDataChannelMessage.fromBinary(_toPcm16Bytes(chunk)));
       offset = end;
       chunkIndex++;
       state = state.copyWith(sentSeconds: chunkIndex);

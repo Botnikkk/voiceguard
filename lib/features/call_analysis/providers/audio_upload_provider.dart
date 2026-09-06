@@ -13,9 +13,10 @@ enum UploadStage { idle, decoding, streaming, awaitingVerdict, done, error }
 class AudioUploadState {
   final UploadStage stage;
   final String? fileName;
-  final double progress; // 0..1 of samples streamed so far
+  final double progress;
   final AnalysisResult analysis;
   final String? errorMessage;
+  final int serverDownEvent;
 
   const AudioUploadState({
     this.stage = UploadStage.idle,
@@ -23,6 +24,7 @@ class AudioUploadState {
     this.progress = 0.0,
     this.analysis = const AnalysisResult(),
     this.errorMessage,
+    this.serverDownEvent = 0,
   });
 
   AudioUploadState copyWith({
@@ -31,6 +33,7 @@ class AudioUploadState {
     double? progress,
     AnalysisResult? analysis,
     String? errorMessage,
+    int? serverDownEvent,
   }) {
     return AudioUploadState(
       stage: stage ?? this.stage,
@@ -38,6 +41,7 @@ class AudioUploadState {
       progress: progress ?? this.progress,
       analysis: analysis ?? this.analysis,
       errorMessage: errorMessage,
+      serverDownEvent: serverDownEvent ?? this.serverDownEvent,
     );
   }
 }
@@ -95,6 +99,10 @@ class AudioUploadNotifier extends StateNotifier<AudioUploadState> {
         stage: nextStage,
         progress: result.isFinal ? 1.0 : analyzedFraction,
       );
+    });
+    _socket.onUnavailable.listen((_) {
+      if (_disposed) return;
+      state = state.copyWith(serverDownEvent: state.serverDownEvent + 1);
     });
   }
 
