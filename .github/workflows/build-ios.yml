@@ -18,9 +18,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          # If your pubspec.yaml pins an exact Flutter/Dart SDK version,
-          # uncomment and set it here instead of using 'stable':
-          # flutter-version: '3.24.0'
           cache: true
 
       - name: Show Flutter/Dart versions (sanity check)
@@ -28,10 +25,6 @@ jobs:
 
       - name: Install Flutter dependencies
         run: flutter pub get
-
-      - name: Install CocoaPods dependencies
-        working-directory: ios
-        run: pod install --repo-update
 
       - name: Build unsigned iOS app
         run: flutter build ios --release --no-codesign
