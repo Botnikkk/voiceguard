@@ -1,0 +1,53 @@
+name: Build iOS (unsigned)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          # If your pubspec.yaml pins an exact Flutter/Dart SDK version,
+          # uncomment and set it here instead of using 'stable':
+          # flutter-version: '3.24.0'
+          cache: true
+
+      - name: Show Flutter/Dart versions (sanity check)
+        run: flutter --version
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package as installable .ipa
+        run: |
+          set -e
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/Runner.app
+          zip -r voiceguard-unsigned.ipa Payload
+          ls -la
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voiceguard-unsigned-ipa
+          path: build/ios/iphoneos/voiceguard-unsigned.ipa
+          retention-days: 14
